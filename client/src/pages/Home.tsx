@@ -71,6 +71,21 @@ export default function Home() {
           <Leaderboard />
         </div>
       </div>
+
+      <footer className="max-w-7xl mx-auto mt-16 pb-4 text-center relative z-10">
+        <p className="text-sm text-muted-foreground">
+          Brought to you by{" "}
+          <a
+            href="https://www.shotgunninjas.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary font-display tracking-wide"
+            data-testid="link-shotgunninjas"
+          >
+            Shotgun Ninjas Productions
+          </a>
+        </p>
+      </footer>
     </div>
   );
 }
