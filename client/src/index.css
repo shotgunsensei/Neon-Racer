@@ -73,6 +73,19 @@
     box-shadow: 0 0 15px hsl(var(--secondary) / 0.5), inset 0 0 10px hsl(var(--secondary) / 0.2);
   }
 
+  .glow-pulse {
+    animation: glowPulse 3.5s ease-in-out infinite;
+  }
+
+  @keyframes glowPulse {
+    0%, 100% {
+      filter: drop-shadow(0 0 6px rgba(0, 255, 255, 0.4)) drop-shadow(0 0 12px rgba(0, 255, 255, 0.2));
+    }
+    50% {
+      filter: drop-shadow(0 0 12px rgba(0, 255, 255, 0.8)) drop-shadow(0 0 24px rgba(255, 0, 255, 0.5)) drop-shadow(0 0 40px rgba(0, 255, 255, 0.3));
+    }
+  }
+
   .scanlines {
     position: relative;
   }
