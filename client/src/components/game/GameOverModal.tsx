@@ -1,28 +1,41 @@
-import { useState, useEffect } from "react";
-import { useCreateScore } from "@/hooks/use-scores";
-import { Loader2, Zap, ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, Loader2, Zap } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useLocation } from "wouter";
+import { useCreateScore } from "@/hooks/use-scores";
 
 interface GameOverModalProps {
   score: number;
   level: number;
+  distance?: number;
+  maxCombo?: number;
+  maxMomentum?: number;
+  nearMiss?: number;
+  mode?: "arcade" | "racer" | "chaos";
   onRestart: () => void;
 }
 
-export function GameOverModal({ score, level, onRestart }: GameOverModalProps) {
+export function GameOverModal({
+  score,
+  level,
+  distance = 0,
+  maxCombo = 0,
+  maxMomentum = 0,
+  nearMiss = 0,
+  mode = "arcade",
+  onRestart,
+}: GameOverModalProps) {
   const [playerName, setPlayerName] = useState("");
   const { mutate: createScore, isPending, isSuccess } = useCreateScore();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    // Small explosion of confetti when game over screen appears
-    if (score > 1000) {
+    if (score >= 1000) {
       confetti({
         particleCount: 100,
         spread: 70,
         origin: { y: 0.6 },
-        colors: ['#00FFFF', '#FF00FF', '#FFFF00']
+        colors: ["#00ffff", "#ff00ff", "#ffff00"],
       });
     }
   }, [score]);
@@ -43,8 +56,29 @@ export function GameOverModal({ score, level, onRestart }: GameOverModalProps) {
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm p-4 animate-in fade-in duration-500">
         <div className="bg-card border-2 border-primary box-glow-primary rounded-2xl p-8 max-w-md w-full text-center space-y-6">
           <h2 className="text-4xl font-display font-bold text-glow-primary text-primary">Score Uploaded!</h2>
-          <p className="text-xl">Your legacy is secured in the mainframe.</p>
-          
+          <p className="text-xl">Your run signature is now in the mainframe.</p>
+
+          <div className="grid grid-cols-1 gap-3 text-left">
+            <div className="bg-background/50 p-4 rounded-lg border border-border/50">
+              <p className="text-sm text-muted-foreground">Mode</p>
+              <p className="text-2xl font-display text-primary capitalize">{mode}</p>
+            </div>
+            <div className="bg-background/50 p-4 rounded-lg border border-border/50">
+              <p className="text-sm text-muted-foreground">Distance / Combo Peak</p>
+              <p className="text-2xl font-display text-accent">
+                {distance.toLocaleString()} / {maxCombo}
+              </p>
+            </div>
+            <div className="bg-background/50 p-4 rounded-lg border border-border/50">
+              <p className="text-sm text-muted-foreground">Near-Miss Peak</p>
+              <p className="text-2xl font-display text-primary">{nearMiss}</p>
+            </div>
+            <div className="bg-background/50 p-4 rounded-lg border border-border/50">
+              <p className="text-sm text-muted-foreground">Overdrive Peak</p>
+              <p className="text-2xl font-display text-secondary">{maxMomentum.toFixed(1)}x</p>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-4 pt-4">
             <button
               onClick={onRestart}
@@ -68,28 +102,50 @@ export function GameOverModal({ score, level, onRestart }: GameOverModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm p-4 animate-in fade-in duration-300">
       <div className="bg-card border-2 border-destructive box-glow-destructive rounded-2xl p-8 max-w-md w-full text-center space-y-6 relative overflow-hidden">
-        
-        {/* Striped overlay for style */}
-        <div className="absolute inset-0 opacity-5 pointer-events-none" 
-             style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #fff 10px, #fff 20px)' }}>
-        </div>
+        <div
+          className="absolute inset-0 opacity-5 pointer-events-none"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(45deg, transparent, transparent 10px, #fff 10px, #fff 20px)",
+          }}
+        />
 
-        <h2 className="text-5xl font-display font-black text-glow-destructive text-destructive">CRASHED</h2>
-        
-        <div className="grid grid-cols-2 gap-4 my-6">
+        <h2 className="text-5xl font-display font-black text-glow-destructive text-destructive">RUN COMPLETE</h2>
+
+          <div className="grid grid-cols-2 gap-4 my-6">
           <div className="bg-background/50 p-4 rounded-lg border border-border/50">
             <div className="text-sm text-muted-foreground uppercase tracking-wider mb-1">Final Score</div>
             <div className="text-3xl font-display font-bold text-accent">{score.toLocaleString()}</div>
           </div>
           <div className="bg-background/50 p-4 rounded-lg border border-border/50">
-            <div className="text-sm text-muted-foreground uppercase tracking-wider mb-1">Level Reached</div>
+            <div className="text-sm text-muted-foreground uppercase tracking-wider mb-1">Mode</div>
+            <div className="text-3xl font-display font-bold text-primary capitalize">{mode}</div>
+          </div>
+          <div className="bg-background/50 p-4 rounded-lg border border-border/50">
+            <div className="text-sm text-muted-foreground uppercase tracking-wider mb-1">Level</div>
             <div className="text-3xl font-display font-bold text-primary">{level}</div>
           </div>
-        </div>
+            <div className="bg-background/50 p-4 rounded-lg border border-border/50">
+              <div className="text-sm text-muted-foreground uppercase tracking-wider mb-1">Distance / Combo</div>
+              <div className="text-3xl font-display font-bold text-secondary">
+                {distance.toLocaleString()} / {maxCombo}
+              </div>
+            </div>
+            <div className="bg-background/50 p-4 rounded-lg border border-border/50">
+              <div className="text-sm text-muted-foreground uppercase tracking-wider mb-1">Near-Miss Peak</div>
+              <div className="text-3xl font-display font-bold text-primary">{nearMiss}</div>
+            </div>
+            <div className="bg-background/50 p-4 rounded-lg border border-border/50">
+              <div className="text-sm text-muted-foreground uppercase tracking-wider mb-1">Overdrive Peak</div>
+              <div className="text-3xl font-display font-bold text-secondary">{maxMomentum.toFixed(1)}x</div>
+            </div>
+          </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2 text-left">
-            <label htmlFor="playerName" className="text-sm font-display tracking-widest text-primary">ENTER PILOT IDENTIFICATION</label>
+            <label htmlFor="playerName" className="text-sm font-display tracking-widest text-primary">
+              ENTER PILOT IDENTIFICATION
+            </label>
             <div className="relative">
               <input
                 id="playerName"
