@@ -1,12 +1,14 @@
+import { useMemo } from "react";
 import { useScores } from "@/hooks/use-scores";
 import { Trophy, Medal, Orbit, Loader2, AlertCircle } from "lucide-react";
 
 export function Leaderboard() {
   const { data: scores, isLoading, isError } = useScores();
-
-  // Sort scores descending (just in case backend doesn't, though it should)
-  const sortedScores = scores?.slice().sort((a, b) => b.score - a.score) || [];
-  const top10 = sortedScores.slice(0, 10);
+  const top10 = useMemo(() => {
+    if (!scores) return [];
+    const sortedScores = [...scores].sort((a, b) => b.score - a.score);
+    return sortedScores.slice(0, 10);
+  }, [scores]);
 
   return (
     <div className="bg-card/80 backdrop-blur-md border border-secondary/50 rounded-xl p-6 box-glow-secondary relative overflow-hidden">

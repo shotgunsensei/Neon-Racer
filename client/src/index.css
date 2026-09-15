@@ -72,6 +72,24 @@
   .box-glow-secondary {
     box-shadow: 0 0 15px hsl(var(--secondary) / 0.5), inset 0 0 10px hsl(var(--secondary) / 0.2);
   }
+  .box-glow-accent {
+    box-shadow: 0 0 15px hsl(var(--accent) / 0.5), inset 0 0 10px hsl(var(--accent) / 0.2);
+  }
+  .text-shadow-glow {
+    text-shadow: 0 0 10px currentColor;
+  }
+  .neon-scan-bg {
+    background: linear-gradient(90deg, transparent 0%, rgba(147,51,234,0.4) 50%, transparent 100%);
+    background-size: 120px 100%;
+  }
+  @keyframes neon-scan {
+    from {
+      transform: translateX(-120px);
+    }
+    to {
+      transform: translateX(120px);
+    }
+  }
 
   .glow-pulse {
     animation: glowPulse 3.5s ease-in-out infinite;

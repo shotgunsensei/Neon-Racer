@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type InsertHighScore } from "@shared/routes";
+import { api } from "@shared/routes";
+import type { HighScore, InsertHighScore } from "@shared/schema";
 
 // Log Zod errors for easier debugging
 function parseWithLogging<T>(schema: any, data: unknown, label: string): T {
@@ -18,7 +19,7 @@ export function useScores() {
       const res = await fetch(api.scores.list.path, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch scores");
       const data = await res.json();
-      return parseWithLogging(api.scores.list.responses[200], data, "scores.list");
+      return parseWithLogging<HighScore[]>(api.scores.list.responses[200], data, "scores.list");
     },
   });
 }
