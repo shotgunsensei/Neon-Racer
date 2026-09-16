@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ArrowRight, Loader2, Zap } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight, Loader2, Trophy, RotateCcw } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useLocation } from "wouter";
 import { useCreateScore } from "@/hooks/use-scores";
@@ -26,11 +26,20 @@ export function GameOverModal({
   onRestart,
 }: GameOverModalProps) {
   const [playerName, setPlayerName] = useState("");
-  const { mutate: createScore, isPending, isSuccess } = useCreateScore();
+  const { mutate: createScore, isPending, isSuccess, isError } = useCreateScore();
   const [, setLocation] = useLocation();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const successRestartRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (score >= 1000) {
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    inputRef.current?.focus();
+    return () => previousFocusRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (score >= 1000 && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       confetti({
         particleCount: 100,
         spread: 70,
@@ -39,6 +48,10 @@ export function GameOverModal({
       });
     }
   }, [score]);
+
+  useEffect(() => {
+    if (isSuccess) successRestartRef.current?.focus();
+  }, [isSuccess]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,10 +66,11 @@ export function GameOverModal({
 
   if (isSuccess) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm p-4 animate-in fade-in duration-500">
-        <div className="bg-card border-2 border-primary box-glow-primary rounded-2xl p-8 max-w-md w-full text-center space-y-6">
-          <h2 className="text-4xl font-display font-bold text-glow-primary text-primary">Score Uploaded!</h2>
-          <p className="text-xl">Your run signature is now in the mainframe.</p>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm p-4 animate-in fade-in duration-500" role="dialog" aria-modal="true" aria-labelledby="score-accepted-title">
+        <div className="bg-card border border-primary/70 box-glow-primary rounded-none p-6 sm:p-8 max-w-lg w-full text-center space-y-6">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center border border-primary bg-primary/10 text-primary"><Trophy className="h-7 w-7" /></div>
+          <div><p className="font-mono text-[10px] uppercase tracking-[.25em] text-primary">Signature accepted</p><h2 id="score-accepted-title" className="mt-2 text-3xl font-display font-bold text-glow-primary text-primary sm:text-4xl">You left a mark.</h2></div>
+          <p className="text-muted-foreground">Your run signature is now part of the mainframe.</p>
 
           <div className="grid grid-cols-1 gap-3 text-left">
             <div className="bg-background/50 p-4 rounded-lg border border-border/50">
@@ -82,9 +96,10 @@ export function GameOverModal({
           <div className="flex flex-col gap-4 pt-4">
             <button
               onClick={onRestart}
+              ref={successRestartRef}
               className="px-6 py-4 rounded-xl font-display font-bold tracking-widest bg-primary/20 text-primary border-2 border-primary hover:bg-primary hover:text-primary-foreground hover:box-glow-primary transition-all duration-300 flex items-center justify-center gap-2"
             >
-              <Zap className="w-5 h-5" />
+              <RotateCcw className="w-5 h-5" />
               RACE AGAIN
             </button>
             <button
@@ -100,8 +115,8 @@ export function GameOverModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-      <div className="bg-card border-2 border-destructive box-glow-destructive rounded-2xl p-8 max-w-md w-full text-center space-y-6 relative overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 p-4 backdrop-blur-md animate-in fade-in duration-300" role="dialog" aria-modal="true" aria-labelledby="run-complete-title">
+      <div className="bg-card border border-destructive/70 box-glow-destructive rounded-none p-6 sm:p-8 max-w-lg w-full text-center space-y-6 relative overflow-hidden">
         <div
           className="absolute inset-0 opacity-5 pointer-events-none"
           style={{
@@ -110,7 +125,8 @@ export function GameOverModal({
           }}
         />
 
-        <h2 className="text-5xl font-display font-black text-glow-destructive text-destructive">RUN COMPLETE</h2>
+        <p className="font-mono text-[10px] uppercase tracking-[.25em] text-destructive">Connection terminated</p>
+        <h2 id="run-complete-title" className="text-4xl font-display font-black text-glow-destructive text-destructive sm:text-5xl">RUN COMPLETE</h2>
 
           <div className="grid grid-cols-2 gap-4 my-6">
           <div className="bg-background/50 p-4 rounded-lg border border-border/50">
@@ -148,6 +164,7 @@ export function GameOverModal({
             </label>
             <div className="relative">
               <input
+                ref={inputRef}
                 id="playerName"
                 type="text"
                 maxLength={15}
@@ -164,6 +181,7 @@ export function GameOverModal({
             </div>
           </div>
 
+          {isError && <p className="border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">The mainframe refused the upload. Try again, or restart without submitting.</p>}
           <button
             type="submit"
             disabled={isPending || !playerName.trim()}
@@ -185,7 +203,7 @@ export function GameOverModal({
           disabled={isPending}
           className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-4 pt-2 transition-colors disabled:opacity-50"
         >
-          Skip and Restart
+          Skip and restart
         </button>
       </div>
     </div>

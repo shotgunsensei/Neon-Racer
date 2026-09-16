@@ -1,36 +1,37 @@
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: 240 100% 4%;
-  --foreground: 180 100% 95%;
+  --background: 228 34% 7%;
+  --foreground: 210 33% 95%;
 
-  --primary: 180 100% 50%;
-  --primary-foreground: 240 100% 4%;
+  --primary: 174 93% 54%;
+  --primary-foreground: 228 34% 7%;
 
-  --secondary: 300 100% 50%;
-  --secondary-foreground: 0 0% 100%;
+  --secondary: 335 88% 67%;
+  --secondary-foreground: 228 34% 7%;
 
-  --accent: 60 100% 50%;
-  --accent-foreground: 240 100% 4%;
+  --accent: 42 96% 63%;
+  --accent-foreground: 228 34% 7%;
 
-  --destructive: 340 100% 50%;
-  --destructive-foreground: 0 0% 100%;
+  --destructive: 3 88% 67%;
+  --destructive-foreground: 228 34% 7%;
 
-  --muted: 240 50% 15%;
-  --muted-foreground: 180 30% 70%;
+  --muted: 228 25% 15%;
+  --muted-foreground: 215 17% 66%;
 
-  --card: 240 80% 6%;
-  --card-foreground: 180 100% 95%;
+  --card: 228 30% 11%;
+  --card-foreground: 210 33% 95%;
 
-  --border: 300 100% 50%;
-  --ring: 180 100% 50%;
+  --border: 219 27% 25%;
+  --ring: 174 93% 54%;
   
-  --font-display: 'Orbitron', sans-serif;
-  --font-body: 'Rajdhani', sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Space Grotesk', sans-serif;
+  --font-mono: 'DM Mono', monospace;
 
   --radius: 0.5rem;
 }
@@ -39,25 +40,24 @@
   body {
     @apply bg-background text-foreground antialiased min-h-screen;
     font-family: var(--font-body);
-    background-image: 
-      radial-gradient(circle at 50% 0%, rgba(255, 0, 255, 0.1) 0%, transparent 50%),
-      radial-gradient(circle at 50% 100%, rgba(0, 255, 255, 0.1) 0%, transparent 50%);
+    background-image:
+      radial-gradient(circle at 12% 5%, hsl(var(--primary) / 0.12), transparent 34%),
+      radial-gradient(circle at 88% 90%, hsl(var(--secondary) / 0.10), transparent 36%);
     background-attachment: fixed;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: -0.02em;
   }
 }
 
 @layer utilities {
   .text-glow-primary {
-    text-shadow: 0 0 10px hsl(var(--primary)), 0 0 20px hsl(var(--primary));
+    text-shadow: 0 0 22px hsl(var(--primary) / 0.38);
   }
   .text-glow-secondary {
-    text-shadow: 0 0 10px hsl(var(--secondary)), 0 0 20px hsl(var(--secondary));
+    text-shadow: 0 0 22px hsl(var(--secondary) / 0.35);
   }
   .text-glow-accent {
     text-shadow: 0 0 10px hsl(var(--accent)), 0 0 20px hsl(var(--accent));
@@ -67,19 +67,19 @@
   }
   
   .box-glow-primary {
-    box-shadow: 0 0 15px hsl(var(--primary) / 0.5), inset 0 0 10px hsl(var(--primary) / 0.2);
+    box-shadow: 0 14px 40px hsl(var(--primary) / 0.12), inset 0 0 20px hsl(var(--primary) / 0.08);
   }
   .box-glow-secondary {
-    box-shadow: 0 0 15px hsl(var(--secondary) / 0.5), inset 0 0 10px hsl(var(--secondary) / 0.2);
+    box-shadow: 0 14px 40px hsl(var(--secondary) / 0.12), inset 0 0 20px hsl(var(--secondary) / 0.08);
   }
   .box-glow-accent {
-    box-shadow: 0 0 15px hsl(var(--accent) / 0.5), inset 0 0 10px hsl(var(--accent) / 0.2);
+    box-shadow: 0 14px 40px hsl(var(--accent) / 0.12), inset 0 0 20px hsl(var(--accent) / 0.08);
   }
   .text-shadow-glow {
     text-shadow: 0 0 10px currentColor;
   }
   .neon-scan-bg {
-    background: linear-gradient(90deg, transparent 0%, rgba(147,51,234,0.4) 50%, transparent 100%);
+    background: linear-gradient(90deg, transparent 0%, hsl(var(--primary) / 0.16) 50%, transparent 100%);
     background-size: 120px 100%;
   }
   @keyframes neon-scan {
@@ -123,5 +123,14 @@
     background-size: 100% 4px;
     z-index: 50;
     pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

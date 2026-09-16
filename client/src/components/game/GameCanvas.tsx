@@ -9,12 +9,14 @@ import {
   createObstacle,
   createPowerUp,
   createProjectile,
+  createStormFormation,
   spawnExplosion,
   GAME_MODE_PROFILES,
   checkCollision,
 } from "./GameEngine";
 import { GameOverModal } from "./GameOverModal";
-import { ChevronLeft, ChevronRight, Crosshair, Flame, Hourglass, Shield, Sparkles, Target, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Crosshair, Flame, Hourglass, Shield, Sparkles, Target, Volume2, VolumeX, Zap } from "lucide-react";
+import { useGameAudio } from "./useGameAudio";
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 1000;
@@ -57,6 +59,10 @@ interface HudSnapshot {
   focusCooldown: number;
   timeWarp: number;
   momentum: number;
+  stormCountdown: number;
+  stormTimer: number;
+  stormWave: number;
+  stormsCleared: number;
   isGameOver: boolean;
   isPaused: boolean;
   isStarted: boolean;
@@ -169,6 +175,10 @@ const toHudData = (state: GameState): HudSnapshot => ({
   focusCooldown: Math.ceil(state.focusCooldown / 60),
   timeWarp: Math.ceil(state.timeWarpTimer / 60),
   momentum: Math.round(state.momentum * 10) / 10,
+  stormCountdown: Math.ceil(state.stormCountdown / 60),
+  stormTimer: Math.ceil(state.stormTimer / 60),
+  stormWave: state.stormWave,
+  stormsCleared: state.stormsCleared,
   isGameOver: state.isGameOver,
   isPaused: state.isPaused,
   isStarted: state.isStarted,
@@ -189,7 +199,13 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
   const stateRef = useRef<GameState | null>(null);
   const modeRef = useRef<GameMode>(mode);
   const gameOverNotifiedRef = useRef(false);
+  const reducedMotionRef = useRef(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const lastInactiveDrawRef = useRef(0);
+  const lastHudRefreshRef = useRef(0);
   const onGameOverRef = useRef(onGameOver);
+  const { muted, ensureAudio, play, setIntensity, toggleMuted } = useGameAudio();
+  const playRef = useRef(play);
+  const ensureAudioRef = useRef(ensureAudio);
 
   const [hudData, setHudData] = useState<HudSnapshot>({
     score: 0,
@@ -209,6 +225,10 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     focusCooldown: 0,
     timeWarp: 0,
     momentum: 1,
+    stormCountdown: 0,
+    stormTimer: 0,
+    stormWave: 0,
+    stormsCleared: 0,
     isGameOver: false,
     isPaused: false,
     isStarted: false,
@@ -218,6 +238,21 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
   useEffect(() => {
     onGameOverRef.current = onGameOver;
   }, [onGameOver]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const syncPreference = () => {
+      reducedMotionRef.current = media.matches;
+    };
+    syncPreference();
+    media.addEventListener("change", syncPreference);
+    return () => media.removeEventListener("change", syncPreference);
+  }, []);
+
+  useEffect(() => {
+    playRef.current = play;
+    ensureAudioRef.current = ensureAudio;
+  }, [ensureAudio, play]);
 
   const initGame = useCallback((nextMode: GameMode = modeRef.current) => {
     const state = createInitialState(CANVAS_WIDTH, CANVAS_HEIGHT, nextMode);
@@ -234,11 +269,34 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     if (!state) return;
 
     if (!state.isStarted) {
+      ensureAudioRef.current();
+      playRef.current("launch");
       state.isStarted = true;
       state.isPaused = false;
       gameOverNotifiedRef.current = false;
       setHudData((prev) => ({ ...prev, isStarted: true, isPaused: false, isGameOver: false }));
     }
+  }, []);
+
+  const activateSurge = useCallback(() => {
+    const state = stateRef.current;
+    if (!state || !state.isStarted || state.isPaused || state.isGameOver) return;
+    if (state.focus < FOCUS_MAX || state.focusTimer > 0 || state.focusCooldown > 0) return;
+
+    state.focus = 0;
+    state.focusTimer = FOCUS_DURATION;
+    state.focusCooldown = FOCUS_COOLDOWN;
+    state.score += FOCUS_SCORE_BONUS;
+    state.screenShake = Math.max(state.screenShake, 10);
+    spawnExplosion(
+      state,
+      state.player.x + state.player.w / 2,
+      state.player.y + state.player.h / 2,
+      "#c4b5fd",
+      42,
+    );
+    playRef.current("surge");
+    setHudData(toHudData(state));
   }, []);
 
   const togglePause = useCallback(() => {
@@ -545,6 +603,39 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       state.baseObstacleSpeed = Math.min(profile.baseObstacleSpeed * 2.2, state.baseObstacleSpeed + 0.35);
       state.spawnRate = Math.max(profile.minSpawnRate, state.spawnRate - 3);
       state.score += 20;
+      playRef.current("level");
+    }
+
+    if (state.stormTimer > 0) {
+      state.stormTimer -= deltaScale;
+      state.stormSpawnCounter += motionScale;
+      const formationInterval = Math.max(48, 92 - state.level * 2 - state.stormWave * 3);
+      if (state.stormSpawnCounter >= formationInterval && state.obstacles.length < MAX_OBSTACLES - 4) {
+        state.stormSpawnCounter = 0;
+        state.obstacles.push(...createStormFormation(cw, state));
+      }
+      if (state.stormTimer <= 0) {
+        state.stormTimer = 0;
+        state.stormsCleared += 1;
+        state.stormCountdown = Math.max(780, profile.stormInterval - state.stormWave * 75);
+        state.score += 500 + state.stormWave * 180;
+        addFocus(48);
+        applyMomentum(0.35);
+        playRef.current("stormClear");
+      }
+    } else {
+      state.stormCountdown -= deltaScale;
+      if (state.stormCountdown <= 0) {
+        state.stormWave += 1;
+        state.stormTimer = profile.stormDuration + Math.min(240, state.stormWave * 30);
+        state.stormSpawnCounter = 999;
+        state.stormSafeLane = clamp(Math.floor((state.player.x + state.player.w / 2) / (cw / 6)), 0, 5);
+        state.stormPatternStep = 0;
+        state.obstacles.length = 0;
+        state.nearMissStreak = 0;
+        state.screenShake = Math.max(state.screenShake, 8);
+        playRef.current("storm");
+      }
     }
 
     if (state.player.boostTimer > 0) state.player.boostTimer -= deltaScale;
@@ -586,6 +677,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
         const shotX = state.player.x + state.player.w / 2;
         fireWeaponBurst(shotX);
         state.weaponCooldown = isWeaponActive ? (isFocusMode ? 6 : 8) : 15;
+        playRef.current("shot");
 
         if (state.projectiles.length > MAX_PROJECTILES) {
           state.projectiles.splice(0, state.projectiles.length - MAX_PROJECTILES);
@@ -593,11 +685,13 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       }
     }
 
-    const dynamicSpawn = Math.max(profile.minSpawnRate, state.spawnRate - state.level * 0.12);
-    state.obstacleSpawnCounter += motionScale;
-    while (state.obstacleSpawnCounter >= dynamicSpawn && state.obstacles.length < MAX_OBSTACLES) {
-      state.obstacleSpawnCounter -= dynamicSpawn;
-      state.obstacles.push(createObstacle(cw, state, Math.random() < 0.28));
+    if (state.stormTimer <= 0) {
+      const dynamicSpawn = Math.max(profile.minSpawnRate, state.spawnRate - state.level * 0.12);
+      state.obstacleSpawnCounter += motionScale;
+      while (state.obstacleSpawnCounter >= dynamicSpawn && state.obstacles.length < MAX_OBSTACLES) {
+        state.obstacleSpawnCounter -= dynamicSpawn;
+        state.obstacles.push(createObstacle(cw, state, Math.random() < 0.28));
+      }
     }
 
     state.powerUpSpawnCounter += motionScale;
@@ -688,6 +782,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     for (let i = state.powerUps.length - 1; i >= 0; i--) {
       const powerUp = state.powerUps[i];
       if (checkCollision(playerHitbox, powerUp)) {
+        playRef.current("pickup");
         spawnExplosion(state, powerUp.x + powerUp.w / 2, powerUp.y + powerUp.h / 2, powerUp.color, 16);
 
         if (powerUp.type === "shield") {
@@ -731,15 +826,16 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
     for (let i = state.obstacles.length - 1; i >= 0; i--) {
       const obstacle = state.obstacles[i];
-      const obstaclePassedPlayerLine = obstacle.y + obstacle.h >= playerHitbox.y - NEAR_MISS_PROXIMITY;
+      const obstaclePassedPlayerLine = obstacle.y > playerHitbox.y + playerHitbox.h;
       if (!obstacle.nearMissChecked && obstaclePassedPlayerLine) {
         obstacle.nearMissChecked = true;
-        const obstacleCenter = obstacle.x + obstacle.w / 2;
-        const playerCenter = state.player.x + state.player.w / 2;
-        const nearDistance = Math.abs(playerCenter - obstacleCenter);
-        const nearWindow = (state.player.w + obstacle.w) * 0.45 + NEAR_MISS_PROXIMITY;
+        const horizontalGap = Math.max(
+          playerHitbox.x - (obstacle.x + obstacle.w),
+          obstacle.x - (playerHitbox.x + playerHitbox.w),
+          0,
+        );
 
-        if (nearDistance <= nearWindow) {
+        if (horizontalGap > 0 && horizontalGap <= NEAR_MISS_PROXIMITY) {
           state.nearMissStreak += 1;
           state.maxNearMissStreak = Math.max(state.maxNearMissStreak, state.nearMissStreak);
           state.comboWindow = Math.max(state.comboWindow, 90);
@@ -748,6 +844,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
           applyMomentum(0.07 + state.nearMissStreak * 0.01);
           addFocus(8 + state.nearMissStreak * 0.7);
           state.screenShake = Math.min(10, state.screenShake + 1.5);
+          playRef.current("nearMiss");
         } else {
           state.nearMissStreak = 0;
           state.momentum = Math.max(1, state.momentum - 0.08);
@@ -769,11 +866,13 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
           state.momentum = Math.max(1, state.momentum * 0.78);
           state.score += 20;
           state.focus = Math.max(0, state.focus * 0.6);
+          playRef.current("shieldBreak");
           removeBySwap(state.obstacles, i);
           continue;
         }
 
         state.isGameOver = true;
+        playRef.current("crash");
         state.screenShake = 18;
         state.player.weaponTimer = 0;
         state.player.boostTimer = 0;
@@ -852,7 +951,44 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       ctx.restore();
     }
 
-    if (state.screenShake > 0) {
+    if (state.stormTimer > 0) {
+      const pulse = reducedMotionRef.current ? 0.4 : (Math.sin(state.frames * 0.18) + 1) * 0.5;
+      ctx.save();
+      ctx.fillStyle = `rgba(244, 63, 94, ${0.025 + pulse * 0.035})`;
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.strokeStyle = `rgba(244, 63, 94, ${0.42 + pulse * 0.35})`;
+      ctx.lineWidth = 5;
+      ctx.strokeRect(10, 10, cw - 20, ch - 20);
+      for (let y = 0; y < ch; y += 120) {
+        ctx.globalAlpha = 0.08 + pulse * 0.06;
+        ctx.fillStyle = "#fb7185";
+        ctx.fillRect(0, (y + state.frames * 3) % ch, cw, 2);
+      }
+      ctx.restore();
+    }
+
+    if (state.focusTimer > 0) {
+      const pulse = reducedMotionRef.current ? 0.4 : (Math.sin(state.frames * 0.3) + 1) * 0.5;
+      ctx.save();
+      const surgeGlow = ctx.createRadialGradient(
+        state.player.x + state.player.w / 2,
+        state.player.y + state.player.h / 2,
+        10,
+        state.player.x + state.player.w / 2,
+        state.player.y + state.player.h / 2,
+        360,
+      );
+      surgeGlow.addColorStop(0, `rgba(34, 211, 238, ${0.08 + pulse * 0.06})`);
+      surgeGlow.addColorStop(1, "rgba(124, 58, 237, 0)");
+      ctx.fillStyle = surgeGlow;
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.strokeStyle = `rgba(196, 181, 253, ${0.3 + pulse * 0.3})`;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(18, 18, cw - 36, ch - 36);
+      ctx.restore();
+    }
+
+    if (state.screenShake > 0 && !reducedMotionRef.current) {
       const jitter = clamp(state.screenShake * 0.6, 0, 8);
       ctx.save();
       ctx.translate(Math.random() * jitter * 2 - jitter, Math.random() * jitter * 2 - jitter);
@@ -898,6 +1034,13 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     initGame(mode);
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.isContentEditable ||
+        target?.matches("input, textarea, select, button, [role='textbox']")
+      ) {
+        return;
+      }
       const state = stateRef.current;
       if (!state) return;
 
@@ -919,6 +1062,12 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       if (key === "restart" && state.isGameOver) {
         e.preventDefault();
         restartRun();
+        return;
+      }
+
+      if (key === "focus") {
+        e.preventDefault();
+        activateSurge();
         return;
       }
 
@@ -949,14 +1098,18 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       lastFrameRef.current = time;
       const deltaScale = Math.min(40, deltaMs || FRAME_TIME) / FRAME_TIME;
 
-      if (state && state.isStarted && !state.isPaused && !state.isGameOver) {
+      const isActivelyRunning = Boolean(state && state.isStarted && !state.isPaused && !state.isGameOver);
+      if (state && isActivelyRunning) {
         updateGame(state, deltaScale, CANVAS_WIDTH, CANVAS_HEIGHT);
       }
 
-      if (state) {
-        drawGame(ctx, state, CANVAS_WIDTH, CANVAS_HEIGHT);
-      } else {
-        drawGame(ctx, createInitialState(CANVAS_WIDTH, CANVAS_HEIGHT, mode), CANVAS_WIDTH, CANVAS_HEIGHT);
+      if (isActivelyRunning || time - lastInactiveDrawRef.current >= 100) {
+        lastInactiveDrawRef.current = time;
+        if (state) {
+          drawGame(ctx, state, CANVAS_WIDTH, CANVAS_HEIGHT);
+        } else {
+          drawGame(ctx, createInitialState(CANVAS_WIDTH, CANVAS_HEIGHT, mode), CANVAS_WIDTH, CANVAS_HEIGHT);
+        }
       }
 
       if (state?.isGameOver && !gameOverNotifiedRef.current) {
@@ -974,9 +1127,16 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
         onGameOverRef.current(meta.score, meta.level, meta);
       }
 
-      if (state && (state.frames % HUD_REFRESH_FRAMES === 0 || state.isGameOver || state.isPaused || !state.isStarted)) {
+      const shouldRefreshHud =
+        state &&
+        (isActivelyRunning
+          ? state.frames % HUD_REFRESH_FRAMES === 0
+          : time - lastHudRefreshRef.current >= 100);
+      if (state && shouldRefreshHud) {
+        lastHudRefreshRef.current = time;
         const next = toHudData(state);
         setHudData((previous) => {
+          setIntensity(Math.min(1, state.level / 12 + (state.stormTimer > 0 ? 0.35 : 0)));
           if (
             previous.score !== next.score ||
             previous.level !== next.level ||
@@ -990,7 +1150,14 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
             previous.maxNearMissStreak !== next.maxNearMissStreak ||
             previous.maxMomentum !== next.maxMomentum ||
             previous.momentum !== next.momentum ||
+            previous.focus !== next.focus ||
+            previous.focusTimer !== next.focusTimer ||
+            previous.focusCooldown !== next.focusCooldown ||
             previous.timeWarp !== next.timeWarp ||
+            previous.stormCountdown !== next.stormCountdown ||
+            previous.stormTimer !== next.stormTimer ||
+            previous.stormWave !== next.stormWave ||
+            previous.stormsCleared !== next.stormsCleared ||
             previous.isPaused !== next.isPaused ||
             previous.isStarted !== next.isStarted ||
             previous.isGameOver !== next.isGameOver ||
@@ -1015,7 +1182,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [initGame, mode, restartRun, startRun, togglePause, updateGame]);
+  }, [activateSurge, initGame, mode, restartRun, setIntensity, startRun, togglePause, updateGame]);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -1049,16 +1216,39 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
   });
 
   return (
-    <div className="relative w-full max-w-4xl mx-auto scanlines border-4 border-primary rounded-xl overflow-hidden box-glow-primary bg-black">
+    <div
+      className={`relative mx-auto w-full max-w-4xl overflow-hidden border bg-black scanlines ${
+        hudData.stormTimer > 0
+          ? "border-rose-500 shadow-[0_0_38px_rgba(244,63,94,.38)]"
+          : hudData.focusTimer > 0
+            ? "border-violet-300 shadow-[0_0_42px_rgba(139,92,246,.46)]"
+            : "border-primary/80 box-glow-primary"
+      }`}
+    >
       <canvas ref={canvasRef} className="w-full h-auto max-h-[80vh] block object-contain" />
 
-      <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-start pointer-events-none">
+      <div className="pointer-events-none absolute left-0 top-0 flex w-full items-start justify-between p-3 sm:p-5">
         <div className="space-y-2">
-          <div className="bg-background/80 backdrop-blur border border-primary/50 text-primary px-4 py-2 rounded-lg font-display text-2xl shadow-[0_0_10px_rgba(0,255,255,0.3)]">
+          <div className="border border-primary/50 bg-background/80 px-3 py-2 font-display text-lg text-primary backdrop-blur sm:text-2xl">
             SCORE: {hudData.score.toLocaleString()}
           </div>
-          <div className="bg-background/80 backdrop-blur border border-secondary/50 text-secondary px-4 py-1 rounded-lg font-display text-lg shadow-[0_0_10px_rgba(255,0,255,0.3)] inline-block">
+          <div className="inline-block border border-secondary/50 bg-background/80 px-3 py-1 font-display text-sm text-secondary backdrop-blur sm:text-lg">
             LEVEL {hudData.level}
+          </div>
+          <div className="w-36 border border-violet-300/40 bg-background/85 p-2 backdrop-blur sm:w-48">
+            <div className="mb-1 flex items-center justify-between font-mono text-[9px] uppercase tracking-wider">
+              <span className={hudData.focus >= FOCUS_MAX ? "text-violet-200" : "text-muted-foreground"}>Neon Surge</span>
+              <span className="text-violet-200">{hudData.focusTimer > 0 ? `${hudData.focusTimer}s` : `${hudData.focus}%`}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden bg-muted">
+              <div
+                className={`h-full transition-[width] duration-150 ${hudData.focus >= FOCUS_MAX || hudData.focusTimer > 0 ? "bg-violet-300 shadow-[0_0_12px_#c4b5fd]" : "bg-primary"}`}
+                style={{ width: `${hudData.focusTimer > 0 ? 100 : hudData.focus}%` }}
+              />
+            </div>
+            <p className="mt-1 hidden font-mono text-[8px] uppercase tracking-wider text-muted-foreground sm:block">
+              {hudData.focus >= FOCUS_MAX ? "F // ready" : "Near misses build charge"}
+            </p>
           </div>
           {hudData.timeWarp > 0 && (
             <div className="mt-2 text-xs text-accent flex items-center gap-1">
@@ -1068,23 +1258,23 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
           )}
         </div>
 
-        <div className="space-y-1 text-right">
-          <div className="bg-background/80 border border-border/40 px-4 py-2 rounded-lg">
+        <div className="hidden space-y-1 text-right sm:block">
+          <div className="bg-background/80 border border-border/40 px-3 py-2">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">MODE</p>
             <p className="font-display text-primary">{MODE_UI[hudData.mode].label}</p>
             <p className="text-xs text-muted-foreground">{MODE_UI[hudData.mode].detail}</p>
           </div>
-          <div className="bg-background/80 border border-border/40 px-4 py-2 rounded-lg">
+          <div className="bg-background/80 border border-border/40 px-3 py-2">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Distance</p>
             <p className="font-display text-accent">{hudData.distance}</p>
           </div>
-          <div className="bg-background/80 border border-border/40 px-4 py-2 rounded-lg">
+          <div className="bg-background/80 border border-border/40 px-3 py-2">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Combo</p>
             <p className="font-display text-secondary">
               {hudData.combo} / {hudData.maxCombo}
             </p>
           </div>
-          <div className="bg-background/80 border border-border/40 px-4 py-2 rounded-lg">
+          <div className="bg-background/80 border border-border/40 px-3 py-2">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Near-Miss</p>
             <p className="font-display text-accent">
               {hudData.nearMissStreak} / {hudData.maxNearMissStreak}
@@ -1096,7 +1286,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
               />
             </div>
           </div>
-          <div className="bg-background/80 border border-border/40 px-4 py-2 rounded-lg">
+          <div className="bg-background/80 border border-border/40 px-3 py-2">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Overdrive</p>
             <p className={`font-display ${hudData.momentum >= 2 ? "text-secondary" : "text-primary"}`}>
               {hudData.momentum.toFixed(1)}x
@@ -1111,7 +1301,17 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
         </div>
       </div>
 
-      <div className="absolute top-4 right-4 z-10 flex gap-2 pointer-events-none">
+      <button
+        type="button"
+        onClick={toggleMuted}
+        className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center border border-border/70 bg-background/85 text-muted-foreground backdrop-blur transition-colors hover:border-primary hover:text-primary sm:right-auto sm:left-1/2 sm:-translate-x-1/2"
+        aria-label={muted ? "Enable game audio" : "Mute game audio"}
+        title={muted ? "Enable audio" : "Mute audio"}
+      >
+        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+      </button>
+
+      <div className="pointer-events-none absolute bottom-24 right-3 z-10 flex flex-col gap-2 sm:bottom-auto sm:right-4 sm:top-16 sm:flex-row">
         {hudData.hasShield && (
           <div className="w-12 h-12 rounded-full bg-primary/20 border-2 border-primary flex items-center justify-center box-glow-primary animate-pulse">
             <Shield className="w-6 h-6 text-primary" />
@@ -1142,6 +1342,31 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
           </div>
         )}
       </div>
+
+      {hudData.stormTimer > 0 && (
+        <div className="pointer-events-none absolute inset-x-0 top-[42%] z-10 text-center">
+          <p className="font-mono text-[10px] uppercase tracking-[.45em] text-rose-300">Hostile pattern detected</p>
+          <p className="mt-1 font-display text-2xl font-black uppercase tracking-wider text-rose-100 text-glow-destructive sm:text-4xl">
+            Data Storm // {hudData.stormWave}
+          </p>
+          <p className="mt-1 font-mono text-xs text-rose-200/80">{hudData.stormTimer}s to survive</p>
+        </div>
+      )}
+
+      {hudData.stormTimer <= 0 && hudData.stormCountdown > 0 && hudData.stormCountdown <= 5 && hudData.isStarted && (
+        <div className="pointer-events-none absolute inset-x-0 top-[46%] z-10 text-center">
+          <p className="animate-pulse font-mono text-xs uppercase tracking-[.32em] text-rose-300">
+            Data Storm inbound // {hudData.stormCountdown}
+          </p>
+        </div>
+      )}
+
+      {hudData.focusTimer > 0 && (
+        <div className="pointer-events-none absolute inset-x-0 top-[34%] z-10 text-center">
+          <p className="font-mono text-[10px] uppercase tracking-[.5em] text-violet-200">Reality throttled</p>
+          <p className="mt-1 font-display text-3xl font-black uppercase tracking-wider text-white text-glow-primary sm:text-5xl">Neon Surge</p>
+        </div>
+      )}
 
       {(!hudData.isStarted || !hudData.mode) && (
         <div className="absolute inset-0 bg-background/75 backdrop-blur-sm border border-primary/40 flex flex-col items-center justify-center gap-4 p-8 text-center">
@@ -1186,7 +1411,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       )}
 
       {!hudData.isGameOver && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 hidden px-4 [@media(pointer:coarse)]:flex items-end justify-between">
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-20 hidden px-3 [@media(pointer:coarse)]:flex items-end justify-between">
           <div className="pointer-events-auto flex gap-3">
             <button
               type="button"
@@ -1205,15 +1430,37 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
               <ChevronRight className="h-9 w-9" />
             </button>
           </div>
-          <button
-            type="button"
-            aria-label="Fire weapon"
-            className="pointer-events-auto flex h-16 w-16 touch-none select-none items-center justify-center rounded-full border-2 border-secondary bg-background/80 text-secondary backdrop-blur box-glow-secondary active:bg-secondary/30"
-            {...touchControlProps("shoot")}
-          >
-            <Crosshair className="h-8 w-8" />
-          </button>
+          <div className="pointer-events-auto flex gap-3">
+            <button
+              type="button"
+              aria-label="Activate Neon Surge"
+              disabled={hudData.focus < FOCUS_MAX || hudData.focusTimer > 0}
+              onClick={activateSurge}
+              className="flex h-16 w-16 touch-none select-none items-center justify-center rounded-full border-2 border-violet-300 bg-background/85 text-violet-200 shadow-[0_0_18px_rgba(196,181,253,.35)] active:bg-violet-300/30 disabled:border-muted disabled:text-muted-foreground disabled:shadow-none"
+            >
+              <Sparkles className="h-7 w-7" />
+            </button>
+            <button
+              type="button"
+              aria-label="Fire weapon"
+              className="flex h-16 w-16 touch-none select-none items-center justify-center rounded-full border-2 border-secondary bg-background/80 text-secondary backdrop-blur box-glow-secondary active:bg-secondary/30"
+              {...touchControlProps("shoot")}
+            >
+              <Crosshair className="h-8 w-8" />
+            </button>
+          </div>
         </div>
+      )}
+
+      {!hudData.isGameOver && hudData.isStarted && (
+        <button
+          type="button"
+          onClick={activateSurge}
+          disabled={hudData.focus < FOCUS_MAX || hudData.focusTimer > 0}
+          className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 border border-violet-300 bg-background/90 px-4 py-2 font-mono text-[10px] uppercase tracking-[.22em] text-violet-100 backdrop-blur transition-all hover:bg-violet-300/20 disabled:border-border/50 disabled:text-muted-foreground [@media(pointer:coarse)]:hidden"
+        >
+          {hudData.focus >= FOCUS_MAX ? "F // Activate Surge" : `Surge charging // ${hudData.focus}%`}
+        </button>
       )}
 
       {hudData.timeWarp > 0 && (

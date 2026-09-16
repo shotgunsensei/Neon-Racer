@@ -37,6 +37,7 @@ export function AnimatedBackground() {
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     let animId: number;
     let startTime = performance.now();
@@ -250,7 +251,7 @@ export function AnimatedBackground() {
       drawCorruptionBlocks(now, dt);
       drawScanline(now);
 
-      animId = requestAnimationFrame(animate);
+      if (!reducedMotion) animId = requestAnimationFrame(animate);
     }
 
     animId = requestAnimationFrame(animate);

@@ -94,6 +94,13 @@ export interface GameState {
   nearMissStreak: number;
   maxNearMissStreak: number;
   timeWarpTimer: number;
+  stormCountdown: number;
+  stormTimer: number;
+  stormSpawnCounter: number;
+  stormWave: number;
+  stormsCleared: number;
+  stormSafeLane: number;
+  stormPatternStep: number;
 }
 
 export interface GameModeProfile {
@@ -109,6 +116,8 @@ export interface GameModeProfile {
   powerUpDelay: [number, number];
   boostDuration: number;
   timeWarpDuration: number;
+  stormInterval: number;
+  stormDuration: number;
 }
 
 export const GAME_MODE_PROFILES: Record<GameMode, GameModeProfile> = {
@@ -121,10 +130,12 @@ export const GAME_MODE_PROFILES: Record<GameMode, GameModeProfile> = {
     minSpawnRate: 24,
     obstacleWidth: [36, 82],
     obstacleHeight: [20, 36],
-  obstacleSpeedVariance: 2.2,
-  powerUpDelay: [320, 560],
-  boostDuration: 360,
-  timeWarpDuration: 240,
+    obstacleSpeedVariance: 2.2,
+    powerUpDelay: [320, 560],
+    boostDuration: 360,
+    timeWarpDuration: 240,
+    stormInterval: 1500,
+    stormDuration: 540,
   },
   racer: {
     label: "Racer",
@@ -135,10 +146,12 @@ export const GAME_MODE_PROFILES: Record<GameMode, GameModeProfile> = {
     minSpawnRate: 18,
     obstacleWidth: [32, 78],
     obstacleHeight: [20, 34],
-  obstacleSpeedVariance: 2.6,
-  powerUpDelay: [260, 500],
-  boostDuration: 390,
-  timeWarpDuration: 280,
+    obstacleSpeedVariance: 2.6,
+    powerUpDelay: [260, 500],
+    boostDuration: 390,
+    timeWarpDuration: 280,
+    stormInterval: 1320,
+    stormDuration: 600,
   },
   chaos: {
     label: "Chaos",
@@ -149,10 +162,12 @@ export const GAME_MODE_PROFILES: Record<GameMode, GameModeProfile> = {
     minSpawnRate: 16,
     obstacleWidth: [30, 88],
     obstacleHeight: [18, 38],
-  obstacleSpeedVariance: 2.9,
-  powerUpDelay: [220, 440],
-  boostDuration: 420,
-  timeWarpDuration: 320,
+    obstacleSpeedVariance: 2.9,
+    powerUpDelay: [220, 440],
+    boostDuration: 420,
+    timeWarpDuration: 320,
+    stormInterval: 1140,
+    stormDuration: 660,
   },
 };
 
@@ -214,18 +229,25 @@ export const createInitialState = (canvasWidth: number, canvasHeight: number, mo
     distance: 0,
     combo: 0,
     comboWindow: 0,
-  maxCombo: 0,
-  mode,
-  momentum: 1,
-  maxMomentum: 1,
-  focus: 0,
-  maxFocus: 0,
-  focusTimer: 0,
-  focusCooldown: 0,
-  screenShake: 0,
-  nearMissStreak: 0,
-  maxNearMissStreak: 0,
-  timeWarpTimer: 0,
+    maxCombo: 0,
+    mode,
+    momentum: 1,
+    maxMomentum: 1,
+    focus: 0,
+    maxFocus: 0,
+    focusTimer: 0,
+    focusCooldown: 0,
+    screenShake: 0,
+    nearMissStreak: 0,
+    maxNearMissStreak: 0,
+    timeWarpTimer: 0,
+    stormCountdown: profile.stormInterval,
+    stormTimer: 0,
+    stormSpawnCounter: 0,
+    stormWave: 0,
+    stormsCleared: 0,
+    stormSafeLane: 3,
+    stormPatternStep: 0,
   };
 };
 
@@ -275,6 +297,34 @@ export const createObstacle = (cw: number, state: GameState, isDrifting: boolean
     color: isDrifting ? "#00ffd5" : "#ff0055",
     nearMissChecked: false,
   };
+};
+
+export const createStormFormation = (cw: number, state: GameState): Obstacle[] => {
+  const laneCount = 6;
+  const laneWidth = cw / laneCount;
+  const corridorSteps = [0, 1, 0, -1, 0, 1, 0, -1];
+  const corridorDelta = corridorSteps[(state.stormPatternStep + state.stormWave) % corridorSteps.length];
+  state.stormSafeLane = Math.max(0, Math.min(laneCount - 1, state.stormSafeLane + corridorDelta));
+  state.stormPatternStep += 1;
+  const sharedSpeed = state.baseObstacleSpeed + Math.min(2.4, state.stormWave * 0.18);
+  const obstacles: Obstacle[] = [];
+
+  for (let lane = 0; lane < laneCount; lane += 1) {
+    if (lane === state.stormSafeLane) continue;
+    const obstacle = createObstacle(cw, state, false);
+    obstacle.x = lane * laneWidth + 5;
+    obstacle.y = -70;
+    obstacle.w = laneWidth - 10;
+    obstacle.h = state.stormPatternStep % 3 === 0 ? 34 : 24;
+    obstacle.speed = sharedSpeed;
+    obstacle.drift = 0;
+    obstacle.type = "block";
+    obstacle.points = 100 + state.stormWave * 10;
+    obstacle.color = state.stormPatternStep % 2 === 0 ? "#fb7185" : "#e879f9";
+    obstacles.push(obstacle);
+  }
+
+  return obstacles;
 };
 
 export const createPowerUp = (cw: number, ch: number, mode: GameMode): PowerUp => {

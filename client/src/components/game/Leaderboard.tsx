@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { useScores } from "@/hooks/use-scores";
-import { Trophy, Medal, Orbit, Loader2, AlertCircle } from "lucide-react";
+import { Trophy, Medal, Orbit, AlertCircle, RefreshCw } from "lucide-react";
 
 export function Leaderboard() {
-  const { data: scores, isLoading, isError } = useScores();
+  const { data: scores, isLoading, isError, refetch } = useScores();
   const top10 = useMemo(() => {
     if (!scores) return [];
     const sortedScores = [...scores].sort((a, b) => b.score - a.score);
@@ -11,28 +11,30 @@ export function Leaderboard() {
   }, [scores]);
 
   return (
-    <div className="bg-card/80 backdrop-blur-md border border-secondary/50 rounded-xl p-6 box-glow-secondary relative overflow-hidden">
+    <section className="bg-card/80 backdrop-blur-md border border-border/80 p-5 sm:p-6 relative overflow-hidden" aria-labelledby="leaderboard-title">
       {/* Decorative background element */}
       <div className="absolute top-0 right-0 -mt-10 -mr-10 opacity-10">
         <Orbit className="w-64 h-64 text-secondary animate-spin-slow" style={{ animationDuration: '20s' }} />
       </div>
 
       <div className="flex items-center gap-3 mb-6 relative z-10">
-        <Trophy className="w-8 h-8 text-secondary" />
-        <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-secondary to-accent">
+        <Trophy className="w-6 h-6 text-accent" />
+        <div><p className="font-mono text-[10px] uppercase tracking-[.25em] text-accent">Public signal</p><h2 id="leaderboard-title" className="text-2xl font-bold">
           Hall of Fame
         </h2>
+        </div>
       </div>
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-12 text-secondary">
-          <Loader2 className="w-8 h-8 animate-spin mb-4" />
-          <p className="font-display tracking-widest animate-pulse">Accessing Mainframe...</p>
+          <div className="mb-4 h-8 w-8 animate-pulse border border-primary/60 bg-primary/10" />
+          <p className="font-mono text-xs uppercase tracking-widest animate-pulse">Reading signal...</p>
         </div>
       ) : isError ? (
         <div className="flex flex-col items-center justify-center py-12 text-destructive">
           <AlertCircle className="w-8 h-8 mb-4" />
-          <p className="font-display">Connection Lost</p>
+          <p className="font-display">Connection lost</p>
+          <button onClick={() => refetch()} className="mt-4 inline-flex items-center gap-2 border border-destructive/50 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-destructive hover:bg-destructive/10 focus:outline-none focus:ring-2 focus:ring-destructive"><RefreshCw className="h-3 w-3" /> Retry</button>
         </div>
       ) : top10.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
@@ -81,6 +83,6 @@ export function Leaderboard() {
           ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }
