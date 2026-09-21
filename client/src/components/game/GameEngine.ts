@@ -1,3 +1,5 @@
+import { createFlightPose, type FlightPose } from "./RacerVisuals";
+
 export type GameMode = "arcade" | "racer" | "chaos";
 export type PowerUpType = "shield" | "weapon" | "boost" | "emp";
 export type ObstacleType = "block" | "sweeper";
@@ -49,6 +51,7 @@ export interface StarFieldParticle {
 }
 
 export interface GameState {
+  flight: FlightPose;
   player: {
     x: number;
     y: number;
@@ -196,6 +199,7 @@ export const createInitialState = (canvasWidth: number, canvasHeight: number, mo
   const [minPowerupDelay, maxPowerupDelay] = profile.powerUpDelay;
 
   return {
+    flight: createFlightPose(),
     player: {
       x: canvasWidth / 2 - 20,
       y: canvasHeight - 80,

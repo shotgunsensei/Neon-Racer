@@ -3,7 +3,6 @@ import {
   type GameMode,
   type GameState,
   type Obstacle,
-  type Projectile,
   type StarFieldParticle,
   createInitialState,
   createObstacle,
@@ -14,6 +13,7 @@ import {
   GAME_MODE_PROFILES,
   checkCollision,
 } from "./GameEngine";
+import { drawRacer, drawTrack, inPerspective, lateralSweep, moveRacer, project, steer } from "./RacerVisuals";
 import { GameOverModal } from "./GameOverModal";
 import { ChevronLeft, ChevronRight, Crosshair, Flame, Hourglass, Shield, Sparkles, Target, Volume2, VolumeX, Zap } from "lucide-react";
 import { useGameAudio } from "./useGameAudio";
@@ -273,6 +273,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       playRef.current("launch");
       state.isStarted = true;
       state.isPaused = false;
+      canvasRef.current?.focus({ preventScroll: true });
       gameOverNotifiedRef.current = false;
       setHudData((prev) => ({ ...prev, isStarted: true, isPaused: false, isGameOver: false }));
     }
@@ -303,7 +304,10 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     const state = stateRef.current;
     if (!state || !state.isStarted || state.isGameOver) return;
 
+    state.keys = {};
+    state.flight.lastTap = -Infinity;
     state.isPaused = !state.isPaused;
+    if (!state.isPaused) canvasRef.current?.focus({ preventScroll: true });
     setHudData((prev) => ({ ...prev, isPaused: state.isPaused }));
   }, []);
 
@@ -311,106 +315,6 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     initGame(modeRef.current);
     startRun();
   }, [initGame, startRun]);
-
-  const drawNeonRect = (
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    color: string,
-    isTriangle = false,
-  ) => {
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = color;
-    ctx.fillStyle = color;
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-
-    if (isTriangle) {
-      ctx.beginPath();
-      ctx.moveTo(x + w / 2, y);
-      ctx.lineTo(x + w, y + h);
-      ctx.lineTo(x + w / 2, y + h - 10);
-      ctx.lineTo(x, y + h);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    } else {
-      ctx.beginPath();
-      ctx.roundRect(x, y, w, h, 4);
-      ctx.fill();
-    }
-
-    ctx.shadowBlur = 0;
-  };
-
-  const drawPlayer = (ctx: CanvasRenderingContext2D, state: GameState) => {
-    const { player } = state;
-    const isBoost = player.boostTimer > 0;
-    const isWarped = state.timeWarpTimer > 0;
-    const isOverdrive = state.momentum >= 1.8;
-    const trailColor = isBoost ? "#ff9900" : COLORS.player;
-    const glow = isBoost ? "rgba(255, 120, 0, 0.45)" : "rgba(0, 255, 255, 0.4)";
-
-    const trailLength = isWarped ? 58 : 38;
-    const trail = ctx.createLinearGradient(
-      player.x + player.w / 2,
-      player.y + player.h - 2,
-      player.x + player.w / 2,
-      player.y + player.h + trailLength,
-    );
-    trail.addColorStop(0, `${trailColor}00`);
-    trail.addColorStop(1, `${trailColor}99`);
-    ctx.fillStyle = trail;
-    ctx.fillRect(player.x + player.w / 2 - 5, player.y + player.h - 4, 10, trailLength);
-
-    drawNeonRect(ctx, player.x, player.y, player.w, player.h, COLORS.player, true);
-    ctx.fillStyle = trailColor;
-    ctx.fillRect(player.x + player.w / 2 - 6, player.y + player.h - 3, 12, 6);
-    ctx.fillStyle = glow;
-    ctx.fillRect(player.x + player.w / 2 - 4, player.y + player.h + 2, 8, 10);
-
-    if (isWarped) {
-      ctx.shadowBlur = 24;
-      ctx.shadowColor = "#7c3aed";
-      ctx.strokeStyle = "rgba(124, 58, 237, 0.85)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.ellipse(player.x + player.w / 2, player.y + player.h / 2, player.w, player.w * 0.78, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
-    if (isOverdrive) {
-      const overdrivePulse = (Math.sin(state.frames * 0.25) + 1) * 0.5;
-      ctx.shadowBlur = 16;
-      ctx.shadowColor = `rgba(255, 238, 153, ${0.25 + overdrivePulse * 0.35})`;
-      ctx.strokeStyle = `rgba(255, 238, 153, ${0.5 + overdrivePulse * 0.5})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(
-        player.x + player.w / 2,
-        player.y + player.h / 2,
-        player.w * 1.05,
-        0,
-        Math.PI * 2,
-      );
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
-    if (player.hasShield) {
-      ctx.shadowBlur = 18;
-      ctx.shadowColor = COLORS.playerShield;
-      ctx.strokeStyle = COLORS.playerShield;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(player.x + player.w / 2, player.y + player.h / 2, player.w, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-  };
 
   const drawPowerUp = (
     ctx: CanvasRenderingContext2D,
@@ -465,30 +369,35 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
   };
 
   const drawObstacle = (ctx: CanvasRenderingContext2D, obstacle: Obstacle) => {
-    if (obstacle.type === "sweeper") {
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = COLORS.obstacleDrift;
-      ctx.fillStyle = obstacle.color;
-      ctx.beginPath();
-      ctx.roundRect(obstacle.x, obstacle.y, obstacle.w, obstacle.h, 5);
-      ctx.fill();
-      ctx.fillStyle = "rgba(0,255,255,0.45)";
-      ctx.fillRect(obstacle.x + 2, obstacle.y + 2, Math.max(4, obstacle.w * 0.15), obstacle.h - 4);
-      ctx.fillRect(
-        obstacle.x + obstacle.w - Math.max(4, obstacle.w * 0.15),
-        obstacle.y + 2,
-        Math.max(4, obstacle.w * 0.15),
-        obstacle.h - 4,
-      );
-      ctx.shadowBlur = 0;
-      return;
-    }
-
-    drawNeonRect(ctx, obstacle.x, obstacle.y, obstacle.w, obstacle.h, obstacle.color);
+    const { x, y, w, h, color } = obstacle;
+    const corners = [project(x, y), project(x + w, y), project(x + w, y + h), project(x, y + h)];
+    const height = 13 * project(x, y + h).scale;
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.beginPath();
+    corners.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y + 5); else ctx.lineTo(p.x, p.y + 5); });
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    // Top and front faces retain a clear ground contact edge for collisions.
+    ctx.fillStyle = obstacle.type === "sweeper" ? "#12595e" : "#651535";
+    ctx.beginPath();
+    corners.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y - height); else ctx.lineTo(p.x, p.y - height); });
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color; ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(corners[3].x, corners[3].y - height);
+    ctx.lineTo(corners[2].x, corners[2].y - height);
+    ctx.lineTo(corners[2].x, corners[2].y);
+    ctx.lineTo(corners[3].x, corners[3].y);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
   };
 
   const drawProjectiles = (ctx: CanvasRenderingContext2D, state: GameState) => {
     for (const projectile of state.projectiles) {
+      inPerspective(ctx, projectile, () => {
       const trailGradient = ctx.createLinearGradient(
         projectile.x + projectile.w / 2,
         projectile.y + projectile.h,
@@ -510,6 +419,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       ctx.shadowColor = projectile.color;
       ctx.fillRect(projectile.x, projectile.y, projectile.w, projectile.h);
       ctx.shadowBlur = 0;
+      });
     }
   };
 
@@ -521,42 +431,13 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       ctx.shadowColor = particle.color;
       ctx.shadowBlur = 10;
       ctx.beginPath();
-      ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+      const point = project(particle.x, particle.y);
+      ctx.arc(point.x, point.y, particle.size * point.scale, 0, Math.PI * 2);
       ctx.fill();
     }
 
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
-  };
-
-  const drawGrid = (ctx: CanvasRenderingContext2D, state: GameState, cw: number, ch: number) => {
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    ctx.strokeStyle = COLORS.grid;
-    ctx.lineWidth = 2;
-
-    for (let i = 0; i < ch; i += 96) {
-      const y = (i + state.gridOffset) % ch;
-      ctx.globalAlpha = 0.15 + (1 - y / ch) * 0.2;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(cw, y);
-      ctx.stroke();
-    }
-
-    ctx.globalAlpha = 0.4;
-    for (let i = 0; i < 8; i++) {
-      const x = (i * cw) / 8;
-      ctx.beginPath();
-      ctx.moveTo(cw / 2, 0);
-      ctx.lineTo(x, ch);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(cw / 2, 0);
-      ctx.lineTo(cw - x, ch);
-      ctx.stroke();
-    }
-    ctx.restore();
   };
 
   const updateGame = useCallback((state: GameState, deltaScale: number, cw: number, ch: number) => {
@@ -665,12 +546,8 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
     state.screenShake = Math.max(0, state.screenShake - 0.45 * deltaScale);
 
-    if (state.keys.left && state.player.x > 0) {
-      state.player.x = clamp(state.player.x - moveSpeed, 0, cw - state.player.w);
-    }
-    if (state.keys.right && state.player.x + state.player.w < cw) {
-      state.player.x = clamp(state.player.x + moveSpeed, 0, cw - state.player.w);
-    }
+    const previousX = state.player.x;
+    moveRacer(state, moveSpeed, deltaScale, cw, reducedMotionRef.current);
 
     if (state.weaponCooldown <= 0 && state.isStarted) {
       if (isWeaponActive || state.keys.shoot) {
@@ -749,6 +626,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       h: state.player.h - 16,
       color: COLORS.player,
     };
+    const travelHitbox = lateralSweep(playerHitbox, previousX + 8);
 
     for (let p = state.projectiles.length - 1; p >= 0; p--) {
       const projectile = state.projectiles[p];
@@ -781,7 +659,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
     for (let i = state.powerUps.length - 1; i >= 0; i--) {
       const powerUp = state.powerUps[i];
-      if (checkCollision(playerHitbox, powerUp)) {
+      if (checkCollision(travelHitbox, powerUp)) {
         playRef.current("pickup");
         spawnExplosion(state, powerUp.x + powerUp.w / 2, powerUp.y + powerUp.h / 2, powerUp.color, 16);
 
@@ -852,7 +730,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
         }
       }
 
-      if (checkCollision(playerHitbox, obstacle)) {
+      if (checkCollision(travelHitbox, obstacle)) {
         spawnExplosion(
           state,
           state.player.x + state.player.w / 2,
@@ -918,21 +796,22 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       ctx.fill();
     }
 
-    drawGrid(ctx, state, cw, ch);
+    ctx.globalAlpha = 1;
+    drawTrack(ctx, state);
     drawParticles(ctx, state);
 
-    for (const obstacle of state.obstacles) {
+    for (const obstacle of [...state.obstacles].sort((a, b) => a.y - b.y)) {
       drawObstacle(ctx, obstacle);
     }
 
     drawProjectiles(ctx, state);
 
     for (const powerUp of state.powerUps) {
-      drawPowerUp(ctx, powerUp);
+      inPerspective(ctx, powerUp, () => drawPowerUp(ctx, powerUp));
     }
 
     if (!state.isGameOver) {
-      drawPlayer(ctx, state);
+      drawRacer(ctx, state, reducedMotionRef.current);
     }
   };
 
@@ -1034,18 +913,23 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     initGame(mode);
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const key = normalizeInput(e);
+      if (!key) return;
       const target = e.target as HTMLElement | null;
       if (
         target?.isContentEditable ||
-        target?.matches("input, textarea, select, button, [role='textbox']")
+        target?.matches("input, textarea, select, [role='textbox']") ||
+        (target?.closest("button") && key !== "left" && key !== "right")
       ) {
         return;
       }
       const state = stateRef.current;
       if (!state) return;
 
-      const key = normalizeInput(e);
-      if (!key) return;
+      if (e.repeat && key !== "left" && key !== "right" && key !== "shoot") {
+        e.preventDefault();
+        return;
+      }
 
       if (key === "start") {
         e.preventDefault();
@@ -1076,6 +960,10 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       }
 
       if (key === "left" || key === "right" || key === "shoot") {
+        if (!e.repeat && !state.keys[key] && key !== "shoot") {
+          steer(state, key === "left" ? -1 : 1);
+        }
+        state.keys[e.code] = true;
         state.keys[key] = true;
       }
 
@@ -1087,8 +975,13 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       if (!state) return;
 
       const key = normalizeInput(e);
+      state.keys[e.code] = false;
       if (key === "left" || key === "right" || key === "shoot") {
-        state.keys[key] = false;
+        state.keys[key] = key === "left"
+          ? Boolean(state.keys.KeyA || state.keys.ArrowLeft)
+          : key === "right"
+            ? Boolean(state.keys.KeyD || state.keys.ArrowRight)
+            : false;
       }
     };
 
@@ -1174,6 +1067,19 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     };
 
     requestRef.current = requestAnimationFrame(loop);
+    const clearInput = () => {
+      const state = stateRef.current;
+      if (!state) return;
+      state.keys = {};
+      state.flight.lastTap = -Infinity;
+      if (state.isStarted && !state.isGameOver) {
+        state.isPaused = true;
+        setHudData(toHudData(state));
+      }
+    };
+    const handleVisibility = () => { if (document.hidden) clearInput(); };
+    window.addEventListener("blur", clearInput);
+    document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("keydown", handleKeyDown, { passive: false });
     window.addEventListener("keyup", handleKeyUp);
 
@@ -1181,6 +1087,8 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       cancelAnimationFrame(requestRef.current);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", clearInput);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [activateSurge, initGame, mode, restartRun, setIntensity, startRun, togglePause, updateGame]);
 
@@ -1196,6 +1104,9 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       const state = stateRef.current;
       if (!state) return;
       if (pressed && !state.isStarted) startRun();
+      if (pressed && !state.keys[key] && key !== "shoot") {
+        steer(state, key === "left" ? -1 : 1);
+      }
       state.keys[key] = pressed;
     },
     [startRun],
@@ -1217,7 +1128,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
   return (
     <div
-      className={`relative mx-auto w-full max-w-4xl overflow-hidden border bg-black scanlines ${
+      className={`relative mx-auto h-full w-full max-w-4xl overflow-hidden border bg-black scanlines ${
         hudData.stormTimer > 0
           ? "border-rose-500 shadow-[0_0_38px_rgba(244,63,94,.38)]"
           : hudData.focusTimer > 0
@@ -1225,7 +1136,8 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
             : "border-primary/80 box-glow-primary"
       }`}
     >
-      <canvas ref={canvasRef} className="w-full h-auto max-h-[80vh] block object-contain" />
+      <canvas ref={canvasRef} tabIndex={0} aria-label="Neon Racer track. Arrow keys or A and D to steer; double-tap a direction to barrel roll. P to pause."
+        className="w-full h-full block object-contain outline-none [@media(pointer:coarse)]:pb-20" />
 
       <div className="pointer-events-none absolute left-0 top-0 flex w-full items-start justify-between p-3 sm:p-5">
         <div className="space-y-2">
@@ -1373,6 +1285,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
           <p className="text-2xl font-display text-primary text-glow-primary">Run Ready: {MODE_UI[hudData.mode].label}</p>
           <p className="text-sm text-muted-foreground max-w-lg">
             Dodge obstacles, lock in pickups, and keep your combo alive. <br />
+            Steer with A / D or ← / →. Double-tap either direction for a barrel-roll speed burst. Countersteer to brake; collisions still count. <br />
             Press <span className="text-primary">ENTER</span> or move/shoot to launch.
           </p>
           <button
@@ -1457,7 +1370,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
           type="button"
           onClick={activateSurge}
           disabled={hudData.focus < FOCUS_MAX || hudData.focusTimer > 0}
-          className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 border border-violet-300 bg-background/90 px-4 py-2 font-mono text-[10px] uppercase tracking-[.22em] text-violet-100 backdrop-blur transition-all hover:bg-violet-300/20 disabled:border-border/50 disabled:text-muted-foreground [@media(pointer:coarse)]:hidden"
+          className="absolute bottom-4 left-4 z-20 border border-violet-300 bg-background/90 px-4 py-2 font-mono text-[10px] uppercase tracking-[.22em] text-violet-100 backdrop-blur transition-all hover:bg-violet-300/20 disabled:border-border/50 disabled:text-muted-foreground [@media(pointer:coarse)]:hidden"
         >
           {hudData.focus >= FOCUS_MAX ? "F // Activate Surge" : `Surge charging // ${hudData.focus}%`}
         </button>

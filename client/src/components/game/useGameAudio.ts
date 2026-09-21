@@ -119,7 +119,11 @@ export function useGameAudio() {
 
   useEffect(
     () => () => {
-      if (contextRef.current) void contextRef.current.close();
+      const context = contextRef.current;
+      contextRef.current = null;
+      masterRef.current = null;
+      ambienceRef.current = null;
+      if (context && context.state !== "closed") void context.close();
     },
     [],
   );
