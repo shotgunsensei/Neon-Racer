@@ -1,4 +1,4 @@
-import type { Entity, GameState } from "./GameEngine";
+import type { Entity, GameState, Obstacle } from "./GameEngine";
 
 export interface FlightPose {
   elapsed: number;
@@ -72,31 +72,56 @@ export function lateralSweep(hitbox: Entity, previousX: number): Entity {
   return { ...hitbox, x: Math.min(previousX, hitbox.x), w: hitbox.w + Math.abs(hitbox.x - previousX) };
 }
 
-// One shared ground projection keeps lanes, pickups, shots and threats aligned.
-// The player's center (y=940) stays at its original screen position and scale.
+// A single planar perspective transform: straight world paths stay straight on
+// screen. The old linear X / quadratic Y mapping bowed obstacles off the lanes.
+// A raised camera keeps 60% of the track width visible at entry (formerly 20%).
+// Contact at the player's center remains 1:1; simulation/collision space is unchanged.
+const CONTACT_Y = 940;
+const ENTRY_Y = 180;
+const PERSPECTIVE = 2 / 3;
+
 export function project(x: number, y: number) {
-  const depth = Math.max(0, y / 940);
-  const scale = 0.2 + 0.8 * depth;
-  return { x: 400 + (x - 400) * scale, y: 180 + 760 * depth * depth, scale };
+  const depth = y / CONTACT_Y;
+  const scale = 1 / Math.max(0.25, 1 + PERSPECTIVE * (1 - depth));
+  return { x: 400 + (x - 400) * scale, y: ENTRY_Y + (CONTACT_Y - ENTRY_Y) * depth * scale, scale };
+}
+
+export function projectFootprint(entity: Entity, elevation = 0) {
+  return [[entity.x, entity.y], [entity.x + entity.w, entity.y],
+    [entity.x + entity.w, entity.y + entity.h], [entity.x, entity.y + entity.h]]
+    .map(([x, y]) => {
+      const point = project(x, y);
+      return { ...point, y: point.y - elevation * point.scale };
+    });
 }
 
 export function inPerspective(ctx: CanvasRenderingContext2D, entity: Entity, draw: () => void) {
   const x = entity.x + entity.w / 2;
   const y = entity.y + entity.h / 2;
-  const point = project(x, y);
   const top = project(x, entity.y);
   const bottom = project(x, entity.y + entity.h);
   ctx.save();
-  ctx.translate(point.x, (top.y + bottom.y) / 2);
-  ctx.scale(point.scale, Math.max(0.05, (bottom.y - top.y) / entity.h));
+  // Shear along the same lane ray, rather than drawing shots vertically off-axis.
+  ctx.transform(project(x, y).scale, 0, (bottom.x - top.x) / entity.h,
+    (bottom.y - top.y) / entity.h, (top.x + bottom.x) / 2, (top.y + bottom.y) / 2);
   ctx.translate(-x, -y);
   draw();
   ctx.restore();
 }
 
-export function drawTrack(ctx: CanvasRenderingContext2D, state: GameState) {
+type ScreenPoint = { x: number; y: number };
+function polygon(ctx: CanvasRenderingContext2D, points: ScreenPoint[]) {
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) ctx.moveTo(point.x, point.y);
+    else ctx.lineTo(point.x, point.y);
+  });
+  ctx.closePath();
+}
+
+export function drawTrack(ctx: CanvasRenderingContext2D, state: GameState, reducedMotion = false) {
   ctx.save();
-  const farLeft = project(0, 0), farRight = project(800, 0);
+  const farLeft = project(0, -120), farRight = project(800, -120);
   const nearLeft = project(0, 1040), nearRight = project(800, 1040);
   const floor = ctx.createLinearGradient(0, 180, 0, 1000);
   floor.addColorStop(0, "#141832");
@@ -110,6 +135,19 @@ export function drawTrack(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.closePath();
   ctx.fill();
 
+  // Quiet alternating lane surfaces reinforce depth without hiding the hazards.
+  for (let lane = 0; lane < 6; lane += 2) {
+    ctx.fillStyle = "rgba(129,159,255,0.035)";
+    polygon(ctx, projectFootprint({ x: lane * 800 / 6, y: -120, w: 800 / 6, h: 1160, color: "" }));
+    ctx.fill();
+  }
+  // Wide illuminated shoulders give the roadway physical thickness.
+  for (const [x, width] of [[-18, 18], [800, 18]]) {
+    ctx.fillStyle = "#153445";
+    polygon(ctx, projectFootprint({ x, y: -120, w: width, h: 1160, color: "" }));
+    ctx.fill();
+  }
+
   const glow = ctx.createRadialGradient(400, 180, 0, 400, 180, 220);
   glow.addColorStop(0, "rgba(0,240,255,0.22)");
   glow.addColorStop(1, "rgba(0,240,255,0)");
@@ -117,15 +155,18 @@ export function drawTrack(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.fillRect(180, 0, 440, 400);
   for (let lane = 0; lane <= 6; lane++) {
     const x = lane * 800 / 6;
-    const far = project(x, 0), near = project(x, 1040);
-    ctx.strokeStyle = lane === 0 || lane === 6 ? "#33e8ff" : "rgba(178,92,255,0.28)";
-    ctx.lineWidth = lane === 0 || lane === 6 ? 3 : 1;
+    const far = project(x, -120), near = project(x, 1040);
+    const edge = lane === 0 || lane === 6;
+    ctx.strokeStyle = edge ? "#62eeff" : "rgba(155,162,255,0.38)";
+    ctx.lineWidth = edge ? 2.5 : 1.2;
+    ctx.shadowColor = "#22d3ee";
+    ctx.shadowBlur = edge ? 8 : 0;
     ctx.beginPath(); ctx.moveTo(far.x, far.y); ctx.lineTo(near.x, near.y); ctx.stroke();
   }
+  ctx.shadowBlur = 0;
   for (let y = state.gridOffset - 120; y < 1060; y += 120) {
-    if (y < 0) continue;
     const left = project(0, y), right = project(800, y);
-    ctx.strokeStyle = `rgba(192,73,255,${0.12 + left.scale * 0.22})`;
+    ctx.strokeStyle = `rgba(146,111,231,${0.08 + left.scale * 0.15})`;
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(left.x, left.y); ctx.lineTo(right.x, right.y); ctx.stroke();
     // Trackside pylons add height without obscuring the playable lanes.
@@ -137,7 +178,74 @@ export function drawTrack(ctx: CanvasRenderingContext2D, state: GameState) {
       ctx.fillStyle = "#f19aff";
       ctx.fillRect(p.x - 3 * p.scale, p.y - 55 * p.scale, 6 * p.scale, 5 * p.scale);
     }
+    // Moving rail segments sell speed outside the collision area.
+    const energized = state.player.boostTimer > 0 || state.focusTimer > 0;
+    for (const x of [-10, 810]) {
+      const a = project(x, y), b = project(x, y + (energized && !reducedMotion ? 65 : 28));
+      ctx.strokeStyle = energized ? "#ffd38a" : "#b4f8ff";
+      ctx.lineWidth = 3 * a.scale;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
   }
+
+  // A faint ground ribbon follows the ship's collision width, making it easier
+  // to compare incoming blocks with the player's current path during a bank/roll.
+  const ribbon = { x: state.player.x + 8, y: 160, w: state.player.w - 16, h: state.player.y - 160 + 26, color: "" };
+  const guide = ctx.createLinearGradient(0, project(400, 160).y, 0, CONTACT_Y);
+  guide.addColorStop(0, "rgba(81,246,255,0)");
+  guide.addColorStop(1, "rgba(81,246,255,0.09)");
+  ctx.fillStyle = guide;
+  polygon(ctx, projectFootprint(ribbon)); ctx.fill();
+  ctx.restore();
+}
+
+export function drawObstacle(ctx: CanvasRenderingContext2D, obstacle: Obstacle) {
+  const ground = projectFootprint(obstacle);
+  const top = projectFootprint(obstacle, 18);
+  const scale = project(obstacle.x, obstacle.y + obstacle.h).scale;
+  const sweeper = obstacle.type === "sweeper";
+  ctx.save();
+
+  // The shadow/outline is the real footprint; the raised cap is decoration.
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  polygon(ctx, ground); ctx.fill();
+  const side = obstacle.x + obstacle.w / 2 < 400 ? [1, 2] : [0, 3];
+  ctx.fillStyle = sweeper ? "#0b4746" : "#471932";
+  polygon(ctx, [top[side[0]], top[side[1]], ground[side[1]], ground[side[0]]]); ctx.fill();
+
+  const cap = ctx.createLinearGradient(top[0].x, top[0].y, top[2].x, top[2].y);
+  cap.addColorStop(0, sweeper ? "#25847c" : "#a73262");
+  cap.addColorStop(1, sweeper ? "#113c43" : "#3b1239");
+  ctx.fillStyle = cap;
+  ctx.strokeStyle = obstacle.color;
+  ctx.lineWidth = Math.max(1, 1.4 * scale);
+  polygon(ctx, top); ctx.fill(); ctx.stroke();
+
+  const face = ctx.createLinearGradient(0, top[3].y, 0, ground[3].y);
+  face.addColorStop(0, obstacle.color);
+  face.addColorStop(1, sweeper ? "#113e48" : "#541329");
+  ctx.fillStyle = face;
+  polygon(ctx, [top[3], top[2], ground[2], ground[3]]); ctx.fill();
+
+  // A crisp front contact edge stays readable even when several blocks overlap.
+  ctx.strokeStyle = obstacle.color; ctx.shadowColor = obstacle.color; ctx.shadowBlur = 5;
+  polygon(ctx, ground); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = sweeper ? "#c4fff3" : "#ffd8e9";
+  ctx.lineWidth = Math.max(1, 1.5 * scale);
+  ctx.beginPath(); ctx.moveTo(ground[3].x, ground[3].y); ctx.lineTo(ground[2].x, ground[2].y); ctx.stroke();
+
+  // Direction chevrons distinguish genuinely drifting hazards from fixed blocks.
+  const mark = (u: number, v: number) => {
+    const p = project(obstacle.x + obstacle.w * u, obstacle.y + obstacle.h * v);
+    return { x: p.x, y: p.y - 18 * p.scale };
+  };
+  const marks = sweeper
+    ? [mark(obstacle.drift > 0 ? 0.4 : 0.6, 0.25), mark(obstacle.drift > 0 ? 0.65 : 0.35, 0.5), mark(obstacle.drift > 0 ? 0.4 : 0.6, 0.75)]
+    : [mark(0.25, 0.5), mark(0.75, 0.5)];
+  ctx.beginPath();
+  marks.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -157,7 +265,7 @@ export function drawRacer(ctx: CanvasRenderingContext2D, state: GameState, reduc
   ctx.translate(center.x, center.y);
   ctx.fillStyle = "rgba(0,0,0,0.65)";
   ctx.beginPath(); ctx.ellipse(0, 16, 25, 10, 0, 0, Math.PI * 2); ctx.fill();
-  // Ground marker stays visible through a roll; the maneuver is cosmetic.
+  // Ground marker stays visible through a roll while the hull banks above it.
   ctx.strokeStyle = "rgba(81,246,255,0.35)";
   ctx.beginPath(); ctx.ellipse(0, 12, 23, 9, 0, 0, Math.PI * 2); ctx.stroke();
   ctx.translate(0, -lift);

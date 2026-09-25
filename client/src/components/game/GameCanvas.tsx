@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type GameMode,
   type GameState,
-  type Obstacle,
   type StarFieldParticle,
   createInitialState,
   createObstacle,
@@ -13,7 +12,7 @@ import {
   GAME_MODE_PROFILES,
   checkCollision,
 } from "./GameEngine";
-import { drawRacer, drawTrack, inPerspective, lateralSweep, moveRacer, project, steer } from "./RacerVisuals";
+import { drawObstacle, drawRacer, drawTrack, inPerspective, lateralSweep, moveRacer, project, steer } from "./RacerVisuals";
 import { GameOverModal } from "./GameOverModal";
 import { ChevronLeft, ChevronRight, Crosshair, Flame, Hourglass, Shield, Sparkles, Target, Volume2, VolumeX, Zap } from "lucide-react";
 import { useGameAudio } from "./useGameAudio";
@@ -366,33 +365,6 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(icon, powerUp.x + powerUp.w / 2, powerUp.y + powerUp.h / 2 + 1);
-  };
-
-  const drawObstacle = (ctx: CanvasRenderingContext2D, obstacle: Obstacle) => {
-    const { x, y, w, h, color } = obstacle;
-    const corners = [project(x, y), project(x + w, y), project(x + w, y + h), project(x, y + h)];
-    const height = 13 * project(x, y + h).scale;
-    ctx.save();
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.beginPath();
-    corners.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y + 5); else ctx.lineTo(p.x, p.y + 5); });
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    // Top and front faces retain a clear ground contact edge for collisions.
-    ctx.fillStyle = obstacle.type === "sweeper" ? "#12595e" : "#651535";
-    ctx.beginPath();
-    corners.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y - height); else ctx.lineTo(p.x, p.y - height); });
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = color;
-    ctx.shadowColor = color; ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.moveTo(corners[3].x, corners[3].y - height);
-    ctx.lineTo(corners[2].x, corners[2].y - height);
-    ctx.lineTo(corners[2].x, corners[2].y);
-    ctx.lineTo(corners[3].x, corners[3].y);
-    ctx.closePath(); ctx.fill();
-    ctx.restore();
   };
 
   const drawProjectiles = (ctx: CanvasRenderingContext2D, state: GameState) => {
@@ -797,7 +769,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     }
 
     ctx.globalAlpha = 1;
-    drawTrack(ctx, state);
+    drawTrack(ctx, state, reducedMotionRef.current);
     drawParticles(ctx, state);
 
     for (const obstacle of [...state.obstacles].sort((a, b) => a.y - b.y)) {
@@ -867,19 +839,19 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       ctx.restore();
     }
 
-    if (state.screenShake > 0 && !reducedMotionRef.current) {
-      const jitter = clamp(state.screenShake * 0.6, 0, 8);
-      ctx.save();
-      ctx.translate(Math.random() * jitter * 2 - jitter, Math.random() * jitter * 2 - jitter);
-      drawForeground(ctx, state, cw, ch);
-      ctx.restore();
-      return;
-    }
-
     drawForeground(ctx, state, cw, ch);
 
+    // Impact energy lives at the frame, keeping the camera and lane positions stable.
+    if (state.screenShake > 0 && !reducedMotionRef.current) {
+      ctx.save();
+      ctx.strokeStyle = `rgba(170,236,255,${Math.min(0.45, state.screenShake / 36)})`;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, cw - 4, ch - 4);
+      ctx.restore();
+    }
+
     if (state.timeWarpTimer > 0) {
-      const pulse = (Math.sin(state.frames * 0.2) + 1) * 0.5;
+      const pulse = reducedMotionRef.current ? 0.4 : (Math.sin(state.frames * 0.2) + 1) * 0.5;
       ctx.save();
       ctx.strokeStyle = `rgba(124, 58, 237, ${0.14 + pulse * 0.08})`;
       ctx.lineWidth = 2;
@@ -1128,7 +1100,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
   return (
     <div
-      className={`relative mx-auto h-full w-full max-w-4xl overflow-hidden border bg-black scanlines ${
+      className={`relative mx-auto h-full w-full max-w-4xl overflow-hidden border bg-black ${
         hudData.stormTimer > 0
           ? "border-rose-500 shadow-[0_0_38px_rgba(244,63,94,.38)]"
           : hudData.focusTimer > 0
@@ -1141,11 +1113,13 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
       <div className="pointer-events-none absolute left-0 top-0 flex w-full items-start justify-between p-3 sm:p-5">
         <div className="space-y-2">
-          <div className="border border-primary/50 bg-background/80 px-3 py-2 font-display text-lg text-primary backdrop-blur sm:text-2xl">
-            SCORE: {hudData.score.toLocaleString()}
-          </div>
-          <div className="inline-block border border-secondary/50 bg-background/80 px-3 py-1 font-display text-sm text-secondary backdrop-blur sm:text-lg">
-            LEVEL {hudData.level}
+          <div className="flex items-center gap-2 sm:block sm:space-y-2">
+            <div className="border border-primary/50 bg-background/80 px-3 py-2 font-display text-lg text-primary backdrop-blur sm:text-2xl">
+              SCORE: {hudData.score.toLocaleString()}
+            </div>
+            <div className="inline-block border border-secondary/50 bg-background/80 px-3 py-1 font-display text-sm text-secondary backdrop-blur sm:text-lg">
+              LEVEL {hudData.level}
+            </div>
           </div>
           <div className="w-36 border border-violet-300/40 bg-background/85 p-2 backdrop-blur sm:w-48">
             <div className="mb-1 flex items-center justify-between font-mono text-[9px] uppercase tracking-wider">
@@ -1256,27 +1230,24 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       </div>
 
       {hudData.stormTimer > 0 && (
-        <div className="pointer-events-none absolute inset-x-0 top-[42%] z-10 text-center">
-          <p className="font-mono text-[10px] uppercase tracking-[.45em] text-rose-300">Hostile pattern detected</p>
-          <p className="mt-1 font-display text-2xl font-black uppercase tracking-wider text-rose-100 text-glow-destructive sm:text-4xl">
-            Data Storm // {hudData.stormWave}
-          </p>
-          <p className="mt-1 font-mono text-xs text-rose-200/80">{hudData.stormTimer}s to survive</p>
+        <div className="pointer-events-none absolute right-3 top-16 z-10 text-right sm:inset-x-0 sm:text-center">
+          <span className="border border-rose-400/40 bg-background/85 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-rose-200 sm:text-xs">
+            Storm {hudData.stormWave} · {hudData.stormTimer}s
+          </span>
         </div>
       )}
 
       {hudData.stormTimer <= 0 && hudData.stormCountdown > 0 && hudData.stormCountdown <= 5 && hudData.isStarted && (
-        <div className="pointer-events-none absolute inset-x-0 top-[46%] z-10 text-center">
-          <p className="animate-pulse font-mono text-xs uppercase tracking-[.32em] text-rose-300">
+        <div className="pointer-events-none absolute right-3 top-16 z-10 text-right sm:inset-x-0 sm:text-center">
+          <p className="font-mono text-[9px] uppercase tracking-wider text-rose-300 sm:text-xs">
             Data Storm inbound // {hudData.stormCountdown}
           </p>
         </div>
       )}
 
       {hudData.focusTimer > 0 && (
-        <div className="pointer-events-none absolute inset-x-0 top-[34%] z-10 text-center">
-          <p className="font-mono text-[10px] uppercase tracking-[.5em] text-violet-200">Reality throttled</p>
-          <p className="mt-1 font-display text-3xl font-black uppercase tracking-wider text-white text-glow-primary sm:text-5xl">Neon Surge</p>
+        <div className="pointer-events-none absolute right-3 top-24 z-10 text-right sm:inset-x-0 sm:text-center">
+          <span className="border border-violet-300/40 bg-background/85 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-violet-100 sm:text-xs">Neon Surge · {hudData.focusTimer}s</span>
         </div>
       )}
 

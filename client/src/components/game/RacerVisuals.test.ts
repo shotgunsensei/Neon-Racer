@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { checkCollision, createInitialState, type GameMode } from "./GameEngine";
-import { createFlightPose, lateralSweep, moveRacer, project, steer, updateFlight } from "./RacerVisuals";
+import { createFlightPose, inPerspective, lateralSweep, moveRacer, project, projectFootprint, steer, updateFlight } from "./RacerVisuals";
 
 test("projection grows monotonically toward the racer and preserves its lane at contact", () => {
   let previous = project(100, 0);
@@ -118,6 +118,85 @@ test("restart creates an independent neutral flight pose", () => {
   const restarted = createInitialState(800, 1000);
   assert.deepEqual(restarted.flight, createFlightPose());
   assert.notEqual(first.flight, restarted.flight);
+});
+
+test("straight approaches stay on straight lane rays instead of bowing toward the center", () => {
+  for (const x of [0, 60, 800 / 6, 300, 400, 500, 800 * 5 / 6, 740, 800]) {
+    // Also cover diagonal approaches (sweepers) and negative spawn positions.
+    for (const drift of [-0.15, 0, 0.15]) {
+      const start = project(x - 120 * drift, -120);
+      const end = project(x + 1080 * drift, 1080);
+      for (let y = -100; y < 1080; y += 20) {
+        const p = project(x + y * drift, y);
+        const fraction = (p.y - start.y) / (end.y - start.y);
+        const straightX = start.x + (end.x - start.x) * fraction;
+        assert.ok(Math.abs(p.x - straightX) < 1e-8, `curved approach at x=${x}, y=${y}`);
+      }
+    }
+  }
+});
+
+test("entry keeps the full track readable and spawns move continuously across y=0", () => {
+  assert.ok(project(800, 0).x - project(0, 0).x >= 480 - 1e-8);
+  for (const x of [0, 400, 800]) {
+    for (let y = -120; y <= 1120; y += 10) {
+      const a = project(x, y), b = project(x, y + 0.01);
+      assert.ok(Number.isFinite(a.x) && Number.isFinite(a.y) && a.scale > 0);
+      assert.ok(b.y > a.y && b.y - a.y < 0.03);
+      assert.ok(Math.abs(b.x - a.x) < 0.01);
+    }
+  }
+});
+
+test("storm blocks retain their lane gaps from spawn through the collision zone", () => {
+  const laneWidth = 800 / 6;
+  for (let lane = 0; lane < 6; lane++) {
+    const leftStart = project(lane * laneWidth, -120), leftEnd = project(lane * laneWidth, 1080);
+    const rightStart = project((lane + 1) * laneWidth, -120), rightEnd = project((lane + 1) * laneWidth, 1080);
+    for (let y = -70; y <= 990; y += 20) {
+      const block = { x: lane * laneWidth + 5, y, w: laneWidth - 10, h: 34, color: "red" };
+      for (const p of projectFootprint(block)) {
+        const fraction = (p.y - leftStart.y) / (leftEnd.y - leftStart.y);
+        const leftX = leftStart.x + (leftEnd.x - leftStart.x) * fraction;
+        const rightX = rightStart.x + (rightEnd.x - rightStart.x) * fraction;
+        assert.ok(p.x > leftX && p.x < rightX, `block leaves lane ${lane} at y=${y}`);
+      }
+    }
+  }
+});
+
+test("block elevation preserves its ground footprint and simulation bounds", () => {
+  const block = Object.freeze({ x: 500, y: 920, w: 80, h: 30, color: "red" });
+  const ground = projectFootprint(block), cap = projectFootprint(block, 18);
+  assert.deepEqual(ground[0], project(500, 920));
+  assert.deepEqual(ground[2], project(580, 950));
+  for (let i = 0; i < ground.length; i++) {
+    assert.equal(cap[i].x, ground[i].x);
+    assert.ok(cap[i].y < ground[i].y);
+  }
+});
+
+test("shot and pickup centers follow the same lane ray as the road", () => {
+  for (const x of [20, 380, 740]) {
+    let matrix: number[] = [];
+    let translated: number[] = [];
+    let drawn = false;
+    const ctx = { save() {}, restore() {},
+      transform(...args: number[]) { matrix = args; },
+      translate(...args: number[]) { translated = args; },
+    } as unknown as CanvasRenderingContext2D;
+    const entity = { x, y: 450, w: 12, h: 24, color: "cyan" };
+    inPerspective(ctx, entity, () => { drawn = true; });
+    assert.ok(drawn);
+    const [a, b, c, d, e, f] = matrix;
+    for (const y of [entity.y, entity.y + entity.h]) {
+      const centerX = entity.x + entity.w / 2;
+      const localX = centerX + translated[0], localY = y + translated[1];
+      const expected = project(centerX, y);
+      assert.ok(Math.abs(a * localX + c * localY + e - expected.x) < 1e-8);
+      assert.ok(Math.abs(b * localX + d * localY + f - expected.y) < 1e-8);
+    }
+  }
 });
 
 test("roll burst moves faster in both directions and quick taps carry through the dodge", () => {
