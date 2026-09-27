@@ -1,0 +1,28 @@
+.repair-overlay { --repair-cyan: #67ede0; --repair-amber: #ffca79; position: absolute; inset: 0; z-index: 40; color: #eefaff; }
+.repair-interface { position: absolute; inset: 0; }
+.repair-telemetry { position: absolute; top: 12px; left: 4%; right: 4%; display: flex; justify-content: space-between; gap: 8px; color: var(--repair-cyan); font: 9px var(--font-mono); letter-spacing: .1em; }
+.repair-heading { position: absolute; top: 8%; left: 6%; right: 6%; text-align: center; text-shadow: 0 2px 14px #000; }
+.repair-eyebrow { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--repair-amber); font: 10px var(--font-mono); letter-spacing: .16em; }
+.repair-heading h2 { margin: 7px 0; font-size: clamp(19px, 3.5vw, 34px); font-weight: 700; letter-spacing: -.03em; }
+.repair-heading > p:last-child { margin: 0 auto; max-width: 460px; font-size: clamp(12px, 1.6vw, 15px); color: #b6cbd5; }
+.repair-console { position: absolute; bottom: 4%; left: 50%; transform: translateX(-50%); width: min(500px, 88%); padding: 14px 18px; border: 1px solid #426771; background: linear-gradient(135deg, #101e2bf5, #050b16fa); box-shadow: 0 0 35px #0009, inset 0 1px #67ede033; }
+.repair-step-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 10px var(--font-mono); text-transform: uppercase; color: var(--repair-amber); }
+.repair-step-label span:last-child { white-space: nowrap; color: var(--repair-cyan); }
+.repair-sequence { display: flex; justify-content: center; gap: 9px; margin: 14px 0; }
+.repair-key { display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid #46606d; background: #182733; color: #d5e4ee; }
+.repair-key svg { width: 28px; height: 28px; }
+.repair-key.is-next { border: 2px solid var(--repair-amber); color: var(--repair-amber); background: #423221; box-shadow: 0 0 15px #ffca7922; }
+.repair-key.is-entered { border-color: #67ede066; background: #123c39; color: var(--repair-cyan); }
+.repair-key.is-wrong { border-color: #ff677b; background: #541c29; color: #ff677b; }
+.repair-timer { height: 4px; background: #253340; overflow: hidden; }
+.repair-timer > div { height: 100%; background: var(--repair-amber); }
+.repair-hint { min-height: 28px; margin-top: 9px; text-align: center; font-size: 11px; line-height: 1.4; color: #b6cbd5; }
+.repair-touch-controls { display: none; gap: 12px; justify-content: center; margin-top: 10px; }
+.repair-touch-controls button { touch-action: none; display: flex; gap: 10px; align-items: center; justify-content: center; flex: 1; min-height: 46px; border: 1px solid var(--repair-cyan); color: var(--repair-cyan); background: #133335; font: 11px var(--font-mono); text-transform: uppercase; }
+.repair-touch-controls button:disabled { opacity: .4; }
+.repair-touch-controls button:active { background: #27615b; }
+.repair-touch-controls button:focus-visible { outline: 2px solid var(--repair-amber); outline-offset: 2px; }
+.repair-blackout { position: absolute; inset: 0; pointer-events: none; background: #000; }
+@media (pointer: coarse), (max-width: 640px) { .repair-touch-controls { display: flex; } }
+@media (max-width: 500px) { .repair-telemetry { font-size: 7px; letter-spacing: 0; } .repair-eyebrow { font-size: 8px; } .repair-console { padding: 10px 12px; } .repair-key { width: 39px; height: 39px; } .repair-sequence { gap: 7px; margin: 10px 0; } .repair-step-label { font-size: 8px; } .repair-hint { font-size: 10px; } }
+@media (max-height: 650px) and (min-width: 600px) { .repair-heading { top: 9%; } .repair-heading h2 { font-size: 20px; margin: 3px 0; } .repair-heading > p:last-child { font-size: 11px; } .repair-console { padding: 8px 12px; bottom: 2%; } .repair-sequence { margin: 6px 0; } .repair-key { width: 32px; height: 32px; } .repair-hint { min-height: 0; margin-top: 5px; font-size: 10px; } }

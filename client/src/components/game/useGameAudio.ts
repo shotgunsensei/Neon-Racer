@@ -11,6 +11,9 @@ export type GameSound =
   | "storm"
   | "stormClear"
   | "shieldBreak"
+  | "repairTick"
+  | "repairStep"
+  | "repairFail"
   | "crash";
 
 const SOUND_SHAPES: Record<GameSound, [number, number, number, OscillatorType, number]> = {
@@ -25,6 +28,9 @@ const SOUND_SHAPES: Record<GameSound, [number, number, number, OscillatorType, n
   stormClear: [300, 1100, 0.5, "triangle", 0.1],
   shieldBreak: [900, 120, 0.26, "square", 0.1],
   crash: [140, 38, 0.65, "sawtooth", 0.13],
+  repairTick: [620, 940, 0.07, "triangle", 0.055],
+  repairStep: [440, 1150, 0.25, "sine", 0.08],
+  repairFail: [240, 55, 0.4, "square", 0.08],
 };
 
 export function useGameAudio() {

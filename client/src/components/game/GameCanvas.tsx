@@ -17,6 +17,9 @@ import { drawCockpit, drawPilotWorld, type CameraView } from "./CockpitVisuals";
 import { GameOverModal } from "./GameOverModal";
 import { Camera, ChevronLeft, ChevronRight, Crosshair, Flame, Hourglass, Shield, Sparkles, Target, Volume2, VolumeX, Zap } from "lucide-react";
 import { useGameAudio } from "./useGameAudio";
+import { advanceImmunity, advanceRepair, beginRepair, enterRepairCommand, repairUsesCockpit, type RepairDirection, type RepairState } from "./RepairRoutine";
+import { RepairOverlay } from "./RepairOverlay";
+import { drawRepairBay } from "./RepairVisuals";
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 1000;
@@ -42,6 +45,7 @@ const MOMENTUM_DECAY = 0.0045;
 type InputKey = "left" | "right" | "shoot" | "pause" | "start" | "restart" | "focus" | "view" | null;
 
 interface HudSnapshot {
+  immunity: number;
   score: number;
   level: number;
   hasShield: boolean;
@@ -160,6 +164,7 @@ const normalizeInput = (event: KeyboardEvent): InputKey => {
 };
 
 const toHudData = (state: GameState): HudSnapshot => ({
+  immunity: Math.ceil(state.immunityMs / 1000),
   score: Math.floor(state.score),
   level: state.level,
   hasShield: state.player.hasShield,
@@ -210,17 +215,28 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
   const ensureAudioRef = useRef(ensureAudio);
   const viewRef = useRef<CameraView>("chase");
   const [view, setView] = useState<CameraView>("chase");
+  const [repairDisplay, setRepairDisplay] = useState<{ repair: RepairState; now: number } | null>(null);
+
+  const submitRepairCommand = useCallback((direction: RepairDirection, repeated = false) => {
+    const state = stateRef.current;
+    if (!state?.repair) return;
+    const now = performance.now();
+    const result = enterRepairCommand(state, direction, now, repeated);
+    if (result) playRef.current(result === "wrong" ? "repairFail" : result === "complete" ? "repairStep" : "repairTick");
+    setRepairDisplay({ repair: { ...state.repair }, now });
+  }, []);
 
   // A display preference, deliberately outside simulation state and the loop's
   // dependencies: switching cameras must never reinitialize an active run.
   const toggleView = useCallback(() => {
-    if (stateRef.current?.isGameOver) return;
+    if (stateRef.current?.isGameOver || stateRef.current?.repair) return;
     viewRef.current = viewRef.current === "chase" ? "cockpit" : "chase";
     setView(viewRef.current);
     canvasRef.current?.focus({ preventScroll: true });
   }, []);
 
   const [hudData, setHudData] = useState<HudSnapshot>({
+    immunity: 0,
     score: 0,
     level: 1,
     hasShield: false,
@@ -274,6 +290,8 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     state.isPaused = false;
     stateRef.current = state;
     gameOverNotifiedRef.current = false;
+    setRepairDisplay(null);
+    lastFrameRef.current = 0;
     setHudData(toHudData(state));
   }, []);
 
@@ -294,7 +312,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
   const activateSurge = useCallback(() => {
     const state = stateRef.current;
-    if (!state || !state.isStarted || state.isPaused || state.isGameOver) return;
+    if (!state || !state.isStarted || state.isPaused || state.isGameOver || state.repair) return;
     if (state.focus < FOCUS_MAX || state.focusTimer > 0 || state.focusCooldown > 0) return;
 
     state.focus = 0;
@@ -315,7 +333,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
   const togglePause = useCallback(() => {
     const state = stateRef.current;
-    if (!state || !state.isStarted || state.isGameOver) return;
+    if (!state || !state.isStarted || state.isGameOver || state.repair) return;
 
     state.keys = {};
     state.flight.lastTap = -Infinity;
@@ -716,7 +734,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
         }
       }
 
-      if (checkCollision(travelHitbox, obstacle)) {
+      if (state.immunityMs <= 0 && checkCollision(travelHitbox, obstacle)) {
         spawnExplosion(
           state,
           state.player.x + state.player.w / 2,
@@ -735,17 +753,9 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
           continue;
         }
 
-        state.isGameOver = true;
+        beginRepair(state, performance.now());
         playRef.current("crash");
         state.screenShake = 18;
-        state.player.weaponTimer = 0;
-        state.player.boostTimer = 0;
-        state.focusTimer = 0;
-        state.focusCooldown = 0;
-        state.projectiles = [];
-        state.nearMissStreak = 0;
-        state.momentum = 1;
-        state.focus = 0;
         spawnExplosion(
           state,
           state.player.x + state.player.w / 2,
@@ -802,6 +812,11 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
   };
 
   const drawGame = (ctx: CanvasRenderingContext2D, state: GameState, cw: number, ch: number) => {
+    if (state.repair && repairUsesCockpit(state.repair)) {
+      drawRepairBay(ctx, state.repair, performance.now(), cw, reducedMotionRef.current);
+      drawCockpit(ctx, state, () => drawForeground(ctx, state, CANVAS_WIDTH, CANVAS_HEIGHT), cw);
+      return;
+    }
     const background = ctx.createLinearGradient(0, 0, 0, ch);
     background.addColorStop(0, "rgba(6, 10, 32, 1)");
     background.addColorStop(0.52, "rgba(10, 8, 20, 1)");
@@ -858,6 +873,14 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       drawCockpit(ctx, state, () => drawForeground(ctx, state, CANVAS_WIDTH, CANVAS_HEIGHT), cw);
     } else {
       drawForeground(ctx, state, cw, ch);
+    }
+
+    if (state.immunityMs > 0) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(103,237,224,.8)";
+      ctx.lineWidth = 6;
+      ctx.strokeRect(5, 5, cw - 10, ch - 10);
+      ctx.restore();
     }
 
     // Impact energy lives at the frame, keeping the camera and lane positions stable.
@@ -928,6 +951,12 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       const state = stateRef.current;
       if (!state) return;
 
+      if (state.repair) {
+        e.preventDefault();
+        if (key === "left" || key === "right") submitRepairCommand(key, e.repeat);
+        return;
+      }
+
       if (e.repeat && key !== "left" && key !== "right" && key !== "shoot") {
         e.preventDefault();
         return;
@@ -981,6 +1010,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     const handleKeyUp = (e: KeyboardEvent) => {
       const state = stateRef.current;
       if (!state) return;
+      if (state.repair) return;
 
       const key = normalizeInput(e);
       state.keys[e.code] = false;
@@ -999,15 +1029,31 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       lastFrameRef.current = time;
       const deltaScale = Math.min(40, deltaMs || FRAME_TIME) / FRAME_TIME;
 
-      const isActivelyRunning = Boolean(state && state.isStarted && !state.isPaused && !state.isGameOver);
+      const wasRepairing = Boolean(state?.repair);
+      if (state?.repair) {
+        const previousPhase = state.repair.phase;
+        const result = advanceRepair(state, time);
+        if (state.repair?.phase === "failure" && previousPhase !== "failure") playRef.current("repairFail");
+        if (result === "resumed") {
+          playRef.current("launch");
+          canvas.focus({ preventScroll: true });
+        }
+      }
+      const isActivelyRunning = Boolean(state && state.isStarted && !state.isPaused && !state.isGameOver && !state.repair && !wasRepairing);
       if (state && isActivelyRunning) {
+        advanceImmunity(state, deltaMs);
         updateGame(state, deltaScale, CANVAS_WIDTH, CANVAS_HEIGHT);
       }
 
-      if (isActivelyRunning || time - lastInactiveDrawRef.current >= 100) {
+      if (state?.repair || wasRepairing) {
+        setRepairDisplay(state?.repair ? { repair: { ...state.repair }, now: time } : null);
+      }
+
+      if (isActivelyRunning || state?.repair || wasRepairing || time - lastInactiveDrawRef.current >= 100) {
         lastInactiveDrawRef.current = time;
-        const renderWidth = viewRef.current === "cockpit" ? cockpitWidth : CANVAS_WIDTH;
-        const renderScale = viewRef.current === "cockpit" ? cockpitScale : dpr;
+        const cockpit = viewRef.current === "cockpit" || repairUsesCockpit(state?.repair ?? null);
+        const renderWidth = cockpit ? cockpitWidth : CANVAS_WIDTH;
+        const renderScale = cockpit ? cockpitScale : dpr;
         const pixelWidth = Math.round(renderWidth * renderScale);
         const pixelHeight = Math.round(CANVAS_HEIGHT * renderScale);
         if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
@@ -1039,15 +1085,16 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
       const shouldRefreshHud =
         state &&
-        (isActivelyRunning
+        (Boolean(state.repair) !== wasRepairing || (isActivelyRunning
           ? state.frames % HUD_REFRESH_FRAMES === 0
-          : time - lastHudRefreshRef.current >= 100);
+          : time - lastHudRefreshRef.current >= 100));
       if (state && shouldRefreshHud) {
         lastHudRefreshRef.current = time;
         const next = toHudData(state);
+        setIntensity(state.repair ? 0 : Math.min(1, state.level / 12 + (state.stormTimer > 0 ? 0.35 : 0)));
         setHudData((previous) => {
-          setIntensity(Math.min(1, state.level / 12 + (state.stormTimer > 0 ? 0.35 : 0)));
           if (
+            previous.immunity !== next.immunity ||
             previous.score !== next.score ||
             previous.level !== next.level ||
             previous.hasShield !== next.hasShield ||
@@ -1089,7 +1136,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       if (!state) return;
       state.keys = {};
       state.flight.lastTap = -Infinity;
-      if (state.isStarted && !state.isGameOver) {
+      if (state.isStarted && !state.isGameOver && !state.repair) {
         state.isPaused = true;
         setHudData(toHudData(state));
       }
@@ -1108,7 +1155,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       window.removeEventListener("blur", clearInput);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [activateSurge, initGame, mode, restartRun, setIntensity, startRun, togglePause, toggleView, updateGame]);
+  }, [activateSurge, initGame, mode, restartRun, setIntensity, startRun, submitRepairCommand, togglePause, toggleView, updateGame]);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -1120,7 +1167,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
   const setTouchInput = useCallback(
     (key: "left" | "right" | "shoot", pressed: boolean) => {
       const state = stateRef.current;
-      if (!state) return;
+      if (!state || state.repair || state.isGameOver || state.isPaused) return;
       if (pressed && !state.isStarted) startRun();
       if (pressed && !state.keys[key] && key !== "shoot") {
         steer(state, key === "left" ? -1 : 1);
@@ -1154,10 +1201,11 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
             : "border-primary/80 box-glow-primary"
       }`}
     >
-      <canvas ref={canvasRef} tabIndex={0} data-view={view}
-        aria-label={`Neon Racer ${view === "cockpit" ? "cockpit view with live third-person radar" : "third-person view"}. Arrow keys or A and D to steer; double-tap a direction to barrel roll. Space to fire. V to switch view. P to pause.`}
-        className="w-full h-full block object-contain outline-none [@media(pointer:coarse)]:pb-20" />
+      <canvas ref={canvasRef} tabIndex={0} data-view={repairUsesCockpit(repairDisplay?.repair ?? null) ? "cockpit" : view}
+        aria-label={repairDisplay ? "Cockpit repair view. Mechanic working on a jet engine. Follow the left and right arrow commands to repair your craft." : `Neon Racer ${view === "cockpit" ? "cockpit view with live third-person radar" : "third-person view"}. Arrow keys or A and D to steer; double-tap a direction to barrel roll. Space to fire. V to switch view. P to pause.`}
+        className={`w-full h-full block object-contain outline-none ${repairDisplay ? "" : "[@media(pointer:coarse)]:pb-20"}`} />
 
+      <div className={repairDisplay ? "hidden" : "contents"}>
       <div className="pointer-events-none absolute left-0 top-0 flex w-full items-start justify-between p-3 sm:p-5">
         <div className="space-y-2">
           <div className="flex items-center gap-2 sm:block sm:space-y-2">
@@ -1429,6 +1477,13 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
           }}
         />
       )}
+      {hudData.immunity > 0 && !hudData.isGameOver && (
+        <div role="status" className="pointer-events-none absolute inset-x-0 top-[38%] text-center">
+          <span className="border border-primary/70 bg-background/90 px-4 py-2 font-mono text-xs uppercase tracking-widest text-primary">Repair complete · Immune {hudData.immunity}s</span>
+        </div>
+      )}
+      </div>
+      {repairDisplay && <RepairOverlay repair={repairDisplay.repair} now={repairDisplay.now} score={hudData.score} onCommand={submitRepairCommand} />}
     </div>
   );
 }

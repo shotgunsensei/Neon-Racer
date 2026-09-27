@@ -19,7 +19,7 @@ export const createFlightPose = (): FlightPose => ({
 
 // Frames are simulation time: pausing also pauses the roll and its cooldown.
 export function steer(state: GameState, direction: -1 | 1) {
-  if (!state.isStarted || state.isPaused || state.isGameOver) return;
+  if (!state.isStarted || state.isPaused || state.isGameOver || state.repair) return;
   const pose = state.flight;
   if (pose.lastDirection === direction &&
       pose.elapsed - pose.lastTap <= 17 && pose.cooldown === 0) {
@@ -48,7 +48,7 @@ export function updateFlight(pose: FlightPose, movement: number, delta: number, 
 // A 300 ms directional burst starts at 2.4x strafe speed and eases to normal.
 // Quick taps still dodge; opposite steering (or both arrows) brakes the burst.
 export function moveRacer(state: GameState, baseStep: number, delta: number, width: number, reducedMotion: boolean) {
-  if (!state.isStarted || state.isPaused || state.isGameOver || delta <= 0) return;
+  if (!state.isStarted || state.isPaused || state.isGameOver || state.repair || delta <= 0) return;
   const pose = state.flight;
   const left = Boolean(state.keys.left), right = Boolean(state.keys.right);
   const direction = Number(right) - Number(left);

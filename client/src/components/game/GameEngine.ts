@@ -1,4 +1,5 @@
 import { createFlightPose, type FlightPose } from "./RacerVisuals";
+import type { RepairState } from "./RepairRoutine";
 
 export type GameMode = "arcade" | "racer" | "chaos";
 export type PowerUpType = "shield" | "weapon" | "boost" | "emp";
@@ -51,6 +52,8 @@ export interface StarFieldParticle {
 }
 
 export interface GameState {
+  repair: RepairState | null;
+  immunityMs: number;
   flight: FlightPose;
   player: {
     x: number;
@@ -199,6 +202,8 @@ export const createInitialState = (canvasWidth: number, canvasHeight: number, mo
   const [minPowerupDelay, maxPowerupDelay] = profile.powerUpDelay;
 
   return {
+    repair: null,
+    immunityMs: 0,
     flight: createFlightPose(),
     player: {
       x: canvasWidth / 2 - 20,

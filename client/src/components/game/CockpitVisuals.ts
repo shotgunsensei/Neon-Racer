@@ -217,15 +217,17 @@ export function drawCockpit(ctx: CanvasRenderingContext2D, state: GameState,
   line(ctx, { x: width - 46, y: 470 }, { x: width - 70, y: 680 });
 
   // A sparse collimated sight stays above approaching hazards.
-  ctx.strokeStyle = "rgba(148,242,244,.6)";
-  ctx.lineWidth = 1.5;
-  line(ctx, { x: center - 26, y: 448 }, { x: center - 7, y: 448 });
-  line(ctx, { x: center + 7, y: 448 }, { x: center + 26, y: 448 });
-  line(ctx, { x: center, y: 437 }, { x: center, y: 443 });
-  ctx.fillStyle = "#9de6ed";
-  ctx.font = "14px monospace";
-  ctx.textAlign = "center";
-  ctx.fillText("PILOT // " + String(Math.min(6, Math.floor((state.player.x + 20) / (800 / 6)) + 1)).padStart(2, "0"), center, 160);
+  if (!state.repair) {
+    ctx.strokeStyle = "rgba(148,242,244,.6)";
+    ctx.lineWidth = 1.5;
+    line(ctx, { x: center - 26, y: 448 }, { x: center - 7, y: 448 });
+    line(ctx, { x: center + 7, y: 448 }, { x: center + 26, y: 448 });
+    line(ctx, { x: center, y: 437 }, { x: center, y: 443 });
+    ctx.fillStyle = "#9de6ed";
+    ctx.font = "14px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("PILOT // " + String(Math.min(6, Math.floor((state.player.x + 20) / (800 / 6)) + 1)).padStart(2, "0"), center, 160);
+  }
 
   panel([[0, 756], [174, 800], [256, 892], [width - 276, 900], [width - 270, 678], [width, 660], [width, 1000], [0, 1000]]);
   ctx.save();
