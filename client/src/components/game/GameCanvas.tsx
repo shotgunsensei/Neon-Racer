@@ -13,8 +13,9 @@ import {
   checkCollision,
 } from "./GameEngine";
 import { drawObstacle, drawRacer, drawTrack, inPerspective, lateralSweep, moveRacer, project, steer } from "./RacerVisuals";
+import { drawCockpit, drawPilotWorld, type CameraView } from "./CockpitVisuals";
 import { GameOverModal } from "./GameOverModal";
-import { ChevronLeft, ChevronRight, Crosshair, Flame, Hourglass, Shield, Sparkles, Target, Volume2, VolumeX, Zap } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Crosshair, Flame, Hourglass, Shield, Sparkles, Target, Volume2, VolumeX, Zap } from "lucide-react";
 import { useGameAudio } from "./useGameAudio";
 
 const CANVAS_WIDTH = 800;
@@ -38,7 +39,7 @@ const NEAR_MISS_PROXIMITY = 12;
 const MOMENTUM_MAX = 2.6;
 const MOMENTUM_DECAY = 0.0045;
 
-type InputKey = "left" | "right" | "shoot" | "pause" | "start" | "restart" | "focus" | null;
+type InputKey = "left" | "right" | "shoot" | "pause" | "start" | "restart" | "focus" | "view" | null;
 
 interface HudSnapshot {
   score: number;
@@ -151,6 +152,8 @@ const normalizeInput = (event: KeyboardEvent): InputKey => {
       return "restart";
     case "KeyF":
       return "focus";
+    case "KeyV":
+      return "view";
     default:
       return null;
   }
@@ -205,6 +208,17 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
   const { muted, ensureAudio, play, setIntensity, toggleMuted } = useGameAudio();
   const playRef = useRef(play);
   const ensureAudioRef = useRef(ensureAudio);
+  const viewRef = useRef<CameraView>("chase");
+  const [view, setView] = useState<CameraView>("chase");
+
+  // A display preference, deliberately outside simulation state and the loop's
+  // dependencies: switching cameras must never reinitialize an active run.
+  const toggleView = useCallback(() => {
+    if (stateRef.current?.isGameOver) return;
+    viewRef.current = viewRef.current === "chase" ? "cockpit" : "chase";
+    setView(viewRef.current);
+    canvasRef.current?.focus({ preventScroll: true });
+  }, []);
 
   const [hudData, setHudData] = useState<HudSnapshot>({
     score: 0,
@@ -822,10 +836,10 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       const pulse = reducedMotionRef.current ? 0.4 : (Math.sin(state.frames * 0.3) + 1) * 0.5;
       ctx.save();
       const surgeGlow = ctx.createRadialGradient(
-        state.player.x + state.player.w / 2,
+        viewRef.current === "cockpit" ? cw / 2 : state.player.x + state.player.w / 2,
         state.player.y + state.player.h / 2,
         10,
-        state.player.x + state.player.w / 2,
+        viewRef.current === "cockpit" ? cw / 2 : state.player.x + state.player.w / 2,
         state.player.y + state.player.h / 2,
         360,
       );
@@ -839,7 +853,12 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       ctx.restore();
     }
 
-    drawForeground(ctx, state, cw, ch);
+    if (viewRef.current === "cockpit") {
+      drawPilotWorld(ctx, state, reducedMotionRef.current, cw);
+      drawCockpit(ctx, state, () => drawForeground(ctx, state, CANVAS_WIDTH, CANVAS_HEIGHT), cw);
+    } else {
+      drawForeground(ctx, state, cw, ch);
+    }
 
     // Impact energy lives at the frame, keeping the camera and lane positions stable.
     if (state.screenShake > 0 && !reducedMotionRef.current) {
@@ -879,8 +898,19 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = CANVAS_WIDTH * dpr;
     canvas.height = CANVAS_HEIGHT * dpr;
-    canvas.style.aspectRatio = `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    let cockpitWidth = CANVAS_WIDTH;
+    let cockpitScale = dpr;
+    const resizeObserver = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) {
+        cockpitWidth = Math.max(CANVAS_WIDTH, Math.round(CANVAS_HEIGHT * width / height));
+        // Match display pixels instead of allocating an enormous backing store
+        // when a wide/short window increases the cockpit's logical width.
+        cockpitScale = dpr * Math.min(1, height / CANVAS_HEIGHT, width / cockpitWidth);
+      }
+    });
+    resizeObserver.observe(canvas);
 
     initGame(mode);
 
@@ -891,7 +921,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       if (
         target?.isContentEditable ||
         target?.matches("input, textarea, select, [role='textbox']") ||
-        (target?.closest("button") && key !== "left" && key !== "right")
+        (target?.closest("button") && key !== "left" && key !== "right" && key !== "view")
       ) {
         return;
       }
@@ -906,6 +936,12 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       if (key === "start") {
         e.preventDefault();
         startRun();
+        return;
+      }
+
+      if (key === "view") {
+        e.preventDefault();
+        toggleView();
         return;
       }
 
@@ -970,10 +1006,19 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
       if (isActivelyRunning || time - lastInactiveDrawRef.current >= 100) {
         lastInactiveDrawRef.current = time;
+        const renderWidth = viewRef.current === "cockpit" ? cockpitWidth : CANVAS_WIDTH;
+        const renderScale = viewRef.current === "cockpit" ? cockpitScale : dpr;
+        const pixelWidth = Math.round(renderWidth * renderScale);
+        const pixelHeight = Math.round(CANVAS_HEIGHT * renderScale);
+        if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+          canvas.width = pixelWidth;
+          canvas.height = pixelHeight;
+          ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+        }
         if (state) {
-          drawGame(ctx, state, CANVAS_WIDTH, CANVAS_HEIGHT);
+          drawGame(ctx, state, renderWidth, CANVAS_HEIGHT);
         } else {
-          drawGame(ctx, createInitialState(CANVAS_WIDTH, CANVAS_HEIGHT, mode), CANVAS_WIDTH, CANVAS_HEIGHT);
+          drawGame(ctx, createInitialState(CANVAS_WIDTH, CANVAS_HEIGHT, mode), renderWidth, CANVAS_HEIGHT);
         }
       }
 
@@ -1057,12 +1102,13 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
     return () => {
       cancelAnimationFrame(requestRef.current);
+      resizeObserver.disconnect();
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", clearInput);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [activateSurge, initGame, mode, restartRun, setIntensity, startRun, togglePause, updateGame]);
+  }, [activateSurge, initGame, mode, restartRun, setIntensity, startRun, togglePause, toggleView, updateGame]);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -1108,7 +1154,8 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
             : "border-primary/80 box-glow-primary"
       }`}
     >
-      <canvas ref={canvasRef} tabIndex={0} aria-label="Neon Racer track. Arrow keys or A and D to steer; double-tap a direction to barrel roll. P to pause."
+      <canvas ref={canvasRef} tabIndex={0} data-view={view}
+        aria-label={`Neon Racer ${view === "cockpit" ? "cockpit view with live third-person radar" : "third-person view"}. Arrow keys or A and D to steer; double-tap a direction to barrel roll. Space to fire. V to switch view. P to pause.`}
         className="w-full h-full block object-contain outline-none [@media(pointer:coarse)]:pb-20" />
 
       <div className="pointer-events-none absolute left-0 top-0 flex w-full items-start justify-between p-3 sm:p-5">
@@ -1144,7 +1191,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
           )}
         </div>
 
-        <div className="hidden space-y-1 text-right sm:block">
+        <div className={`hidden space-y-1 text-right ${view === "chase" ? "sm:block" : ""}`}>
           <div className="bg-background/80 border border-border/40 px-3 py-2">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">MODE</p>
             <p className="font-display text-primary">{MODE_UI[hudData.mode].label}</p>
@@ -1187,17 +1234,42 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={toggleMuted}
-        className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center border border-border/70 bg-background/85 text-muted-foreground backdrop-blur transition-colors hover:border-primary hover:text-primary sm:right-auto sm:left-1/2 sm:-translate-x-1/2"
-        aria-label={muted ? "Enable game audio" : "Mute game audio"}
-        title={muted ? "Enable audio" : "Mute audio"}
-      >
-        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-      </button>
+      <div className="absolute right-3 top-3 z-20 flex flex-col items-end gap-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:flex-row">
+        <button
+          type="button"
+          onClick={toggleMuted}
+          className="flex h-11 w-11 items-center justify-center border border-border/70 bg-background/85 text-muted-foreground backdrop-blur transition-colors hover:border-primary hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          aria-label={muted ? "Enable game audio" : "Mute game audio"}
+          title={muted ? "Enable audio" : "Mute audio"}
+        >
+          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        </button>
+        {!hudData.isGameOver && (
+          <button
+            type="button"
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              // A second finger does not reliably synthesize a click while the
+              // first is steering. Switch on press, retaining the held controls.
+              event.preventDefault();
+              toggleView();
+            }}
+            onClick={(event) => { if (event.detail === 0) toggleView(); }}
+            aria-label="Cockpit view"
+            aria-pressed={view === "cockpit"}
+            aria-keyshortcuts="V"
+            title={`Switch to ${view === "cockpit" ? "third-person" : "cockpit"} view (V)`}
+            className={`flex h-11 min-w-11 flex-col items-center justify-center gap-0.5 border bg-background/90 px-2 font-mono text-[9px] uppercase tracking-wider backdrop-blur transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:flex-row sm:gap-2 sm:px-3 sm:text-[10px] ${view === "cockpit" ? "border-primary text-primary" : "border-border/70 text-foreground hover:border-primary"}`}
+          >
+            <Camera className="h-4 w-4" aria-hidden="true" />
+            <span className="sm:hidden">View</span>
+            <span className="hidden sm:inline">{view === "cockpit" ? "Cockpit" : "Chase"} · V</span>
+          </button>
+        )}
+        <span className="sr-only" role="status">{view === "cockpit" ? "Cockpit view. Live third-person radar at lower right." : "Third-person view."}</span>
+      </div>
 
-      <div className="pointer-events-none absolute bottom-24 right-3 z-10 flex flex-col gap-2 sm:bottom-auto sm:right-4 sm:top-16 sm:flex-row">
+      <div className={`pointer-events-none absolute bottom-24 right-3 z-10 flex-col gap-2 sm:bottom-auto sm:right-4 sm:top-16 sm:flex-row ${view === "chase" ? "flex" : "hidden"}`}>
         {hudData.hasShield && (
           <div className="w-12 h-12 rounded-full bg-primary/20 border-2 border-primary flex items-center justify-center box-glow-primary animate-pulse">
             <Shield className="w-6 h-6 text-primary" />
@@ -1230,7 +1302,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       </div>
 
       {hudData.stormTimer > 0 && (
-        <div className="pointer-events-none absolute right-3 top-16 z-10 text-right sm:inset-x-0 sm:text-center">
+        <div className="pointer-events-none absolute right-3 top-28 z-10 text-right sm:top-16 sm:inset-x-0 sm:text-center">
           <span className="border border-rose-400/40 bg-background/85 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-rose-200 sm:text-xs">
             Storm {hudData.stormWave} · {hudData.stormTimer}s
           </span>
@@ -1238,7 +1310,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       )}
 
       {hudData.stormTimer <= 0 && hudData.stormCountdown > 0 && hudData.stormCountdown <= 5 && hudData.isStarted && (
-        <div className="pointer-events-none absolute right-3 top-16 z-10 text-right sm:inset-x-0 sm:text-center">
+        <div className="pointer-events-none absolute right-3 top-28 z-10 text-right sm:top-16 sm:inset-x-0 sm:text-center">
           <p className="font-mono text-[9px] uppercase tracking-wider text-rose-300 sm:text-xs">
             Data Storm inbound // {hudData.stormCountdown}
           </p>
@@ -1246,7 +1318,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       )}
 
       {hudData.focusTimer > 0 && (
-        <div className="pointer-events-none absolute right-3 top-24 z-10 text-right sm:inset-x-0 sm:text-center">
+        <div className="pointer-events-none absolute right-3 top-36 z-10 text-right sm:top-24 sm:inset-x-0 sm:text-center">
           <span className="border border-violet-300/40 bg-background/85 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-violet-100 sm:text-xs">Neon Surge · {hudData.focusTimer}s</span>
         </div>
       )}
@@ -1257,6 +1329,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
           <p className="text-sm text-muted-foreground max-w-lg">
             Dodge obstacles, lock in pickups, and keep your combo alive. <br />
             Steer with A / D or ← / →. Double-tap either direction for a barrel-roll speed burst. Countersteer to brake; collisions still count. <br />
+            Press V or tap View to switch cockpit / third-person cameras. The cockpit radar shows the live third-person track. <br />
             Press <span className="text-primary">ENTER</span> or move/shoot to launch.
           </p>
           <button

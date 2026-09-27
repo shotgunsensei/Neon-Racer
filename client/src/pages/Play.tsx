@@ -59,7 +59,7 @@ export default function Play() {
           <div><p className="font-mono text-[9px] uppercase text-muted-foreground">Peak combo</p><p className="font-display font-bold text-accent">{lastRun.maxCombo}</p></div>
           <div><p className="font-mono text-[9px] uppercase text-muted-foreground">Mode</p><p className="font-display font-bold capitalize text-secondary">{lastRun.mode}</p></div>
         </div>}
-        <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1 pb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"><span className="inline-flex items-center gap-1"><Crosshair className="h-3 w-3 text-primary" /> A / D or ← → · double-tap to roll</span><span className="inline-flex items-center gap-1"><Zap className="h-3 w-3 text-accent" /> F surge</span></div>
+        <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1 pb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"><span className="inline-flex items-center gap-1"><Crosshair className="h-3 w-3 text-primary" /> A / D or ← → · double-tap to roll</span><span className="inline-flex items-center gap-1"><Zap className="h-3 w-3 text-accent" /> F surge</span><span>V switch view</span></div>
       </div>
     </main>
   );
