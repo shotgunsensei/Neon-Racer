@@ -12,6 +12,10 @@ export const errorSchemas = {
   internal: z.object({
     message: z.string(),
   }),
+  rateLimit: z.object({
+    message: z.string(),
+    retryAfter: z.number().int().min(1),
+  }),
 };
 
 export const api = {
@@ -30,6 +34,8 @@ export const api = {
       responses: {
         201: z.custom<typeof highScores.$inferSelect>(),
         400: errorSchemas.validation,
+        413: errorSchemas.validation,
+        429: errorSchemas.rateLimit,
       },
     },
   },
