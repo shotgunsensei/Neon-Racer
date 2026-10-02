@@ -26,7 +26,7 @@ export function GameOverModal({
   onRestart,
 }: GameOverModalProps) {
   const [playerName, setPlayerName] = useState("");
-  const { mutate: createScore, isPending, isSuccess, isError } = useCreateScore();
+  const { mutate: createScore, isPending, isSuccess, isError, error } = useCreateScore();
   const [, setLocation] = useLocation();
   const inputRef = useRef<HTMLInputElement>(null);
   const successRestartRef = useRef<HTMLButtonElement>(null);
@@ -181,7 +181,7 @@ export function GameOverModal({
             </div>
           </div>
 
-          {isError && <p className="border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">The mainframe refused the upload. Try again, or restart without submitting.</p>}
+          {isError && <p className="border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{error?.message || "The mainframe refused the upload. Try again, or restart without submitting."}</p>}
           <button
             type="submit"
             disabled={isPending || !playerName.trim()}
