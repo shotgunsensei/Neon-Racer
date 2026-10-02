@@ -55,6 +55,7 @@ Blocks have shaded caps, side faces and bright ground contact edges. Mint chevro
 - **Schema** (`shared/schema.ts`):
   - `high_scores` table: `id` (serial PK), `player_name` (text), `score` (integer), `level` (integer), `created_at` (timestamp, default now)
 - **Validation**: `drizzle-zod` generates Zod schemas from the Drizzle table definition; these schemas are reused on both client and server for request/response validation
+- **Leaderboard protections and release gate**: `RELEASE.md` documents trimmed 1–15 character names, gameplay minimums and existing integer storage bounds, body/submission limits, retry behavior, and proxy/autoscale limitations. Run `npm run release:check` for game/API tests, typecheck and production build; the same command runs in GitHub CI. Scores remain browser-reported and anonymous.
 - **Migrations**: Drizzle Kit manages migrations, output to `./migrations/`
 
 ### Shared Layer (`shared/`)

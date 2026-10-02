@@ -10,9 +10,15 @@ export const highScores = pgTable("high_scores", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertHighScoreSchema = createInsertSchema(highScores).omit({ 
-  id: true, 
-  createdAt: true 
+// GameCanvas submits a floored, nonnegative score and starts levels at 1.
+// Keep drizzle-zod's integer/INT32 bounds; gameplay has no score or level cap.
+export const insertHighScoreSchema = createInsertSchema(highScores, {
+  playerName: z.string().trim().min(1, "Enter a player name").max(15, "Player name must be 15 characters or fewer"),
+  score: (schema) => schema.min(0),
+  level: (schema) => schema.min(1),
+}).omit({
+  id: true,
+  createdAt: true,
 });
 
 export type HighScore = typeof highScores.$inferSelect;

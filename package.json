@@ -9,6 +9,8 @@
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "test:game": "tsx --test client/src/components/game/*.test.ts",
+    "test:api": "tsx --test server/*.test.ts",
+    "release:check": "npm run test:game && npm run test:api && npm run check && npm run build",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
