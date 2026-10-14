@@ -1,4 +1,5 @@
 async (page) => {
+  const origin = new URL(page.url()).origin;
   const results = [], errors = [];
   const browser = page.context().browser();
   const context = await browser.newContext({ viewport: { width: 390, height: 844 },
@@ -6,7 +7,7 @@ async (page) => {
   const mobile = await context.newPage();
   mobile.on('pageerror', error => errors.push(error.message));
   const check = (value, label) => { if (!value) throw new Error(label); results.push(label); };
-  await mobile.goto('http://127.0.0.1:5187/play?mode=racer');
+  await mobile.goto(`${origin}/play?mode=racer`);
   await mobile.getByRole('button', { name: 'Launch Run', exact: true }).click();
   await mobile.getByRole('button', { name: 'Move right', exact: true }).tap();
   await mobile.getByRole('button', { name: 'Move right', exact: true }).tap();

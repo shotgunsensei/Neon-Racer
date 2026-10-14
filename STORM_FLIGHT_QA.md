@@ -1,9 +1,10 @@
 # Storm Flight release slice
 
-Implementation verified locally; deployment unverified. GitHub push and draft PR
-creation are pending the parent task's October 14 credential-security hold.
-No authenticated GitHub write, merge, Replit publish, migration, credential change,
-paid CI run or new service was performed by this task.
+Implementation verified locally; deployment unverified. Reviewed repository
+delivery is authorized through the separate GitHub connection. The inherited
+shell PAT remains unused and its containment unresolved. Exact-head CI and
+hosted acceptance remain release gates. No Replit publish, migration, credential
+change, paid CI run or new service is claimed by this record.
 
 The completed game/dependency branch remains at `5593880`. A separately preserved
 ORM readiness candidate is documented at the end of this record; it does not
@@ -265,12 +266,12 @@ scanner/selector migration can proceed as engineering work with HMR and CSS
 compatibility checks; no owner authorization is newly required for that local
 work. They were not mixed into this bounded ORM candidate.
 
-The owner-only release step remains resolving the exposed PAT's identity and
-revocation through the parent task, then clearing the authenticated-write hold.
-Deleting entries labelled Replit/Codex does not itself prove which token was
-exposed. Exact-head CI and hosted acceptance remain release gates after the hold;
-provider inspection belongs to CallCommandAI. No token values or raw credential
-configuration were read or printed here.
+The parent now authorizes reviewed repository delivery through the separate
+GitHub app connection. The inherited shell PAT remains unused; its identity and
+containment are unresolved and parent-owned. No revocation is claimed. Exact-head
+CI and hosted acceptance remain release gates; shared provider inspection belongs
+to CallCommandAI. No token values or raw credential configuration were read or
+printed here.
 
 Library discovery was checked once through the prescribed route after reboot.
 The upload tool remains unavailable to that helper, despite agent-catalogue
@@ -278,3 +279,111 @@ entries. That check made zero upload calls; no direct fallback or uncertain-writ
 retry was used. The preserved screenshot and QA deliverable remain local with
 no confirmed Library file IDs. This is a tooling limitation, not a request for
 special user wording or new credentials.
+
+## CSS parser/scanner readiness checkpoint
+
+The isolated toolchain candidate upgrades Tailwind to 4.3.3 and its Vite plugin,
+removes the old PostCSS Nested/Braces scanner path, and confines a selector-parser
+7.1.6 override to typography 0.5.20. Tailwind Merge 3.7.0 supports the new utility
+names. The migration preserves all 18 used V3 palette colors, custom tokens,
+radii (including 9999px pills), 4px blur, small shadows, pointer cursors, sRGB
+results gradient, hover glow, CSS variable utilities and responsive Home spacing.
+No React state, game simulation or API contract changes were made in this step.
+
+The release command passed 36 game, 39 API and four stylesheet/parser tests,
+TypeScript and both production builds. Tests exercise the actual nested selector
+parser, acceptance at nesting depth 256 and rejection at 257, pseudo relocation,
+ordinary/escaped selectors, generated utilities and caller class overrides.
+The fresh independent review's concrete palette, Home and stale-frame findings
+were confirmed and corrected; its final source review found none unresolved.
+
+Twelve refreshed browser captures cover Home, ready, paused chase and paused
+cockpit at 1280x900, 390x844 and 900x390. Geometry, fonts, radii, cursors and blur
+match the ORM baseline; no horizontal overflow or page exceptions occurred.
+The inactive-frame wait and canvas/button assertions confirm camera switching
+before snapshots. Tailwind's outline-hidden now uses outline:none in normal
+colors and restores the transparent outline in forced colors; this replaces the
+old invisible always-transparent outline without claiming identical CSS bytes.
+Fallback fonts were deliberately matched; loaded external fonts and browsers
+other than Chromium are not verified. Tailwind 4 requires Safari 16.4+, Chrome
+111+ and Firefox 128+ per its official upgrade guide. These are release limits.
+
+Full and production npm audit report zero affected declared package nodes.
+This is not a clean security verdict: Vite 7.3.7 still embeds ws 8.18.3 and
+Braces 3.0.3, and Drizzle Kit embeds ws 8.18.2. Those bundled development/migration
+copies are not counted by npm audit. The development HMR path is the next local
+candidate; no migration tool or hosted database was invoked.
+CSS is 102,485 bytes and client JS 479,435 bytes (147.80 kB gzip).
+Real gameplay and a new frame-pacing sample will be rerun on the final toolchain
+candidate before repository delivery; the earlier run's timings are historical.
+
+## Final Vite/HMR candidate
+
+Vite 8.3.4 embeds ws 8.22.0; React plugin 6.1.2 and esbuild 0.28.2 satisfy the
+new compiler's peers. The previous JavaScript build targets remain explicit.
+The actual development entry point returns its Vite handle for fixture cleanup.
+Its logger no longer calls process.exit: receiver rejection must close the
+connection and leave the application available. This was a concrete independent
+review finding, confirmed in the installed error propagation and corrected.
+The completed review found no remaining concrete bypass or compatibility issue.
+Its first turn was interrupted by a platform flag; the same reviewer finished
+source/package review after the defensive correction, without another probe.
+
+A bounded reproduction against the preserved Vite 7 connection found no fragment
+or chunk limits and accepted three fragments despite maxFragments=2. Six new
+regressions use the actual setupVite entry point on a disposable loopback server,
+without importing database/storage startup. They verify the embedded receiver's
+finite defaults, fragment/chunk rejection, ordinary fragmented messages, custom
+HMR messages/broadcasts, valid browser-origin tokens, missing/invalid token
+rejection, wrong path/protocol rejection, play/client/React module transforms,
+and connection rejection followed by usable HTTP and a new HMR connection.
+The fixture's initial raw-socket assumption failed and was corrected before the
+passing run. The release gate includes 36 game, 45 API/HMR and four CSS tests,
+TypeScript and production client/server builds. No lint command exists.
+
+Final real desktop gameplay passed all 16 assertions: visible steering and
+countersteering, roll, firing, opposing-key braking, pause/resume, Calm and camera
+changes with progress intact, wrong repair command, game over/restart, all three
+successful repair rounds and visible re-entry immunity. The first pause assertion
+sampled before the existing 100ms HUD refresh; a settling wait corrected the
+fixture, and the complete rerun passed. Seven mobile touch/reduced-motion checks
+passed with no page exceptions. Twelve final layouts match baseline geometry,
+fonts, radii, blur and cursors, with no horizontal overflow or page exceptions.
+Screenshots were inspected but are supplementary to those actual play checks:
+
+![Active cockpit](docs/qa/cockpit.png)
+![Failed repair and restart dialog](docs/qa/repair-failure.png)
+![Successful repair returns to the preserved run](docs/qa/repair-success.png)
+
+Two sequential six-second seed-matched active Arcade samples at 1280x900/DPR1
+compare the ORM baseline and final toolchain: both median 20.8ms and p95 20.9ms;
+intervals above 33.4ms were 1 and 0 respectively. Both used a 496x621 backing
+canvas. This single short sample shows no measured regression; it establishes
+neither a 60fps guarantee nor a statistically meaningful speed improvement.
+Client CSS is 103,481 bytes and JS 473,827 bytes (144.78kB gzip). The production
+server contains no Vite import, /vite-hmr or WebSocket-token-check markers.
+
+Full and production npm audit report zero affected declared package nodes.
+Residual embedded copies remain: Vite contains Braces 3.0.3 behind its development
+watcher (disableGlobbing is verified true; ignored patterns are repository/tool
+configuration), and Drizzle Kit contains ws 8.18.2 in migration tooling. npm audit
+does not enumerate them. No application request path to those copies was shown;
+this is scoped remediation, not an exhaustive clean security scan. Do not run
+migration tooling against production without separately verified target/backup
+and required approval. The schema remains unchanged and no migration is needed.
+
+Remote main was rechecked at 6172854; the existing ORM branch at 6d1d2cf must be
+preserved. Delivery transfers reviewed Git blobs and verifies the entire tree
+hash before a new draft PR. Required CI must pass at the exact PR head and merged
+main under RELEASE.md; local evidence does not silently replace that gate.
+Replit still declares Node 20, whose exact minor version must support Vite's
+20.19+ floor. Hosted database acceptance, proxy/autoscale behavior and Replit
+sync/build/publish are unverified; shared provider/browser work stays coordinated
+with CallCommandAI. Rollback uses the previous verified source/build; no data or
+schema rollback is required.
+
+Final clean-install verification succeeded after stopping the owned preview and
+pausing installed-package readers: npm ci --ignore-scripts --no-fund installed
+348 packages; release:check passed all 85 tests, TypeScript and both builds.
+The earlier npm install cleanup warning concerned the running old Vite native
+module; the clean installation completed without that warning.

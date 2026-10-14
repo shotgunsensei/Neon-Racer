@@ -34,7 +34,7 @@ export function Leaderboard() {
         <div className="flex flex-col items-center justify-center py-12 text-destructive">
           <AlertCircle className="w-8 h-8 mb-4" />
           <p className="font-display">Connection lost</p>
-          <button onClick={() => refetch()} className="mt-4 inline-flex items-center gap-2 border border-destructive/50 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-destructive hover:bg-destructive/10 focus:outline-none focus:ring-2 focus:ring-destructive"><RefreshCw className="h-3 w-3" /> Retry</button>
+          <button onClick={() => refetch()} className="mt-4 inline-flex items-center gap-2 border border-destructive/50 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-destructive hover:bg-destructive/10 focus:outline-hidden focus:ring-2 focus:ring-destructive"><RefreshCw className="h-3 w-3" /> Retry</button>
         </div>
       ) : top10.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">

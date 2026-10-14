@@ -10,7 +10,8 @@
     "check": "tsc",
     "test:game": "tsx --test client/src/components/game/*.test.ts",
     "test:api": "tsx --test server/*.test.ts",
-    "release:check": "npm run test:game && npm run test:api && npm run check && npm run build",
+    "test:styles": "tsx --test script/styles.test.ts",
+    "release:check": "npm run test:game && npm run test:api && npm run test:styles && npm run check && npm run build",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
@@ -71,7 +72,7 @@
     "react-icons": "^5.4.0",
     "react-resizable-panels": "^2.1.7",
     "recharts": "^2.15.2",
-    "tailwind-merge": "^2.6.0",
+    "tailwind-merge": "^3.7.0",
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.2.5",
     "vaul": "^1.1.2",
@@ -84,8 +85,8 @@
     "@replit/vite-plugin-cartographer": "^0.4.4",
     "@replit/vite-plugin-dev-banner": "^0.1.1",
     "@replit/vite-plugin-runtime-error-modal": "^0.0.3",
-    "@tailwindcss/typography": "^0.5.15",
-    "@tailwindcss/vite": "^4.1.18",
+    "@tailwindcss/typography": "^0.5.20",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/express": "^5.0.0",
     "@types/express-session": "^1.18.0",
@@ -95,17 +96,19 @@
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@types/ws": "^8.5.13",
-    "@vitejs/plugin-react": "^4.7.0",
-    "autoprefixer": "^10.4.20",
+    "@vitejs/plugin-react": "^6.1.2",
     "drizzle-kit": "^0.31.8",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.2",
     "postcss": "^8.5.23",
-    "tailwindcss": "^3.4.17",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.20.5",
     "typescript": "5.6.3",
-    "vite": "^7.3.7"
+    "vite": "^8.3.4"
   },
   "overrides": {
+    "@tailwindcss/typography": {
+      "postcss-selector-parser": "^7.1.6"
+    },
     "drizzle-kit": {
       "@esbuild-kit/esm-loader": "npm:tsx@^4.20.4"
     }

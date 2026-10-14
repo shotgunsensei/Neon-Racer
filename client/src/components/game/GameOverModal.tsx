@@ -174,7 +174,7 @@ export function GameOverModal({
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
                 placeholder="YOUR NAME"
-                className="w-full px-4 py-3 bg-background border-2 border-primary/50 rounded-xl font-display text-xl text-foreground placeholder:text-muted focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/20 uppercase transition-all"
+                className="w-full px-4 py-3 bg-background border-2 border-primary/50 rounded-xl font-display text-xl text-foreground placeholder:text-muted focus:outline-hidden focus:border-primary focus:ring-4 focus:ring-primary/20 uppercase transition-all"
                 disabled={isPending}
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
@@ -187,7 +187,7 @@ export function GameOverModal({
           <button
             type="submit"
             disabled={isPending || !playerName.trim()}
-            className="w-full mt-4 px-6 py-4 rounded-xl font-display font-bold tracking-widest bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg hover:shadow-[0_0_20px_rgba(0,255,255,0.6)] hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2 group"
+            className="w-full mt-4 px-6 py-4 rounded-xl font-display font-bold tracking-widest bg-linear-to-r/srgb from-primary to-secondary text-primary-foreground shadow-lg hover:shadow-[0_0_20px_rgba(0,255,255,0.6)] hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2 group"
           >
             {isPending ? (
               <Loader2 className="w-6 h-6 animate-spin" />
