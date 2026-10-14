@@ -134,3 +134,12 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* The in-game Calm control also covers HUD, repair and result transitions. */
+[data-calm-effects="true"] *,
+[data-calm-effects="true"] *::before,
+[data-calm-effects="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
