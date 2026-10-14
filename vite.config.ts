@@ -1,10 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 export default defineConfig({
   plugins: [
+    tailwindcss(),
     react(),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== "production" &&
@@ -28,6 +30,8 @@ export default defineConfig({
   },
   root: path.resolve(import.meta.dirname, "client"),
   build: {
+    // Preserve the prior JS target while the compiler changes to Rolldown/Oxc.
+    target: ["chrome107", "edge107", "firefox104", "safari16"],
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
   },

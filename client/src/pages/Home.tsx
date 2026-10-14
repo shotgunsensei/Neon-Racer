@@ -38,11 +38,11 @@ export default function Home() {
               <span className="block text-primary text-glow-primary">THE</span>
               <span className="block text-secondary text-glow-secondary">VOID</span>
             </h1>
-            <p className="mt-9 max-w-xl text-lg leading-relaxed text-muted-foreground sm:text-xl">
+            <p className="mt-9 max-w-xl text-lg leading-relaxed text-muted-foreground sm:text-xl sm:leading-7">
               An arcade run inside a living mainframe. Read the signal, cut through the corruption, and leave a score the system cannot forget.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-4">
-              <Link href="/play" className="group inline-flex items-center gap-4 bg-primary px-6 py-4 font-display text-sm font-bold uppercase tracking-[.16em] text-primary-foreground transition-transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background">
+              <Link href="/play" className="group inline-flex items-center gap-4 bg-primary px-6 py-4 font-display text-sm font-bold uppercase tracking-[.16em] text-primary-foreground transition-transform hover:-translate-y-1 focus:outline-hidden focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background">
                 <Gamepad2 className="h-5 w-5" /> Initialize run <ArrowUpRight className="h-5 w-5 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
               </Link>
               <span className="font-mono text-[11px] uppercase tracking-[.18em] text-muted-foreground">No restore point</span>
@@ -61,7 +61,7 @@ export default function Home() {
             <div className="space-y-5">
               {manual.map((item) => (
                 <div key={item.key} className="flex items-center gap-4 border-b border-border/60 pb-4 last:border-0 last:pb-0">
-                  <kbd className={`min-w-[74px] border border-current/40 bg-background px-2 py-2 text-center font-mono text-xs ${item.tone}`}>{item.key}</kbd>
+                  <kbd className={`min-w-[74px] border border-[#e5e7eb] bg-background px-2 py-2 text-center font-mono text-xs ${item.tone}`}>{item.key}</kbd>
                   <div><p className="font-display text-sm font-semibold uppercase tracking-wide">{item.title}</p><p className="text-sm text-muted-foreground">{item.detail}</p></div>
                 </div>
               ))}

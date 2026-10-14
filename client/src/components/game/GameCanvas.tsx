@@ -1218,7 +1218,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     >
       <canvas ref={canvasRef} tabIndex={0} data-view={repairUsesCockpit(repairDisplay?.repair ?? null) ? "cockpit" : view}
         aria-label={repairDisplay ? "Cockpit repair view. Mechanic working on a jet engine. Follow the left and right arrow commands to repair your craft." : `Neon Racer ${view === "cockpit" ? "cockpit view with live third-person radar" : "third-person view"}. Arrow keys or A and D to steer; double-tap a direction to barrel roll. Space to fire. V to switch view. P to pause.`}
-        className={`w-full h-full block object-contain outline-none ${repairDisplay ? "" : "[@media(pointer:coarse)]:pb-20"}`} />
+        className={`w-full h-full block object-contain outline-hidden ${repairDisplay ? "" : "[@media(pointer:coarse)]:pb-20"}`} />
 
       <div className={repairDisplay ? "hidden" : "contents"}>
       <div className="pointer-events-none absolute left-0 top-0 flex w-full items-start justify-between p-3 sm:p-5">
