@@ -1,4 +1,5 @@
 async (page) => {
+  const origin = new URL(page.url()).origin;
   const results = [], errors = [];
   page.on('pageerror', error => errors.push(error.message));
   const check = (condition, name) => { if (!condition) throw new Error(name); results.push(name); };
@@ -17,7 +18,7 @@ async (page) => {
   await page.addInitScript(() => { let seed = 123456789; Math.random = () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296;
   }; });
-  await page.goto('http://127.0.0.1:5187/play?mode=arcade');
+  await page.goto(`${origin}/play?mode=arcade`);
   await page.getByRole('button', { name: 'Launch Run', exact: true }).click();
   await page.waitForTimeout(100);
   const startX = await shipX();
@@ -39,6 +40,8 @@ async (page) => {
   await page.screenshot({ path: 'output/playwright/desktop-gameplay.png' });
   await page.keyboard.press('p');
   await page.getByRole('button', { name: 'Resume', exact: true }).waitFor();
+  // The HUD refreshes at 100 ms; sample after its final paused score is painted.
+  await page.waitForTimeout(150);
   const pausedScore = await score(); await page.waitForTimeout(250);
   check(await score() === pausedScore, 'pause freezes score');
   await page.getByRole('button', { name: 'Calm effects', exact: true }).click();

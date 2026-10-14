@@ -18,13 +18,8 @@ export async function setupVite(server: Server, app: Express) {
   const vite = await createViteServer({
     ...viteConfig,
     configFile: false,
-    customLogger: {
-      ...viteLogger,
-      error: (msg, options) => {
-        viteLogger.error(msg, options);
-        process.exit(1);
-      },
-    },
+    // A malformed HMR message may be logged; logging must not terminate the app.
+    customLogger: viteLogger,
     server: serverOptions,
     appType: "custom",
   });
@@ -55,4 +50,5 @@ export async function setupVite(server: Server, app: Express) {
       next(e);
     }
   });
+  return vite;
 }

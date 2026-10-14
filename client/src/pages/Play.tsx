@@ -34,7 +34,7 @@ export default function Play() {
       <div className="pointer-events-none fixed inset-0 opacity-60 [background-image:linear-gradient(hsl(var(--border)/.13)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--border)/.13)_1px,transparent_1px)] [background-size:56px_56px]" />
       <div className="relative z-10 flex w-full max-w-5xl min-h-0 flex-1 flex-col gap-2 sm:gap-3">
         <header className="flex items-center justify-between border-b border-border/70 pb-2">
-          <button onClick={() => setLocation("/")} className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[.15em] text-muted-foreground transition-colors hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary" aria-label="Return to main menu"><ArrowLeft className="h-4 w-4" /> Menu</button>
+          <button onClick={() => setLocation("/")} className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[.15em] text-muted-foreground transition-colors hover:text-primary focus:outline-hidden focus:ring-2 focus:ring-primary" aria-label="Return to main menu"><ArrowLeft className="h-4 w-4" /> Menu</button>
           <div className="flex items-center gap-3"><Radio className="h-4 w-4 text-primary" /><span className="font-mono text-[10px] uppercase tracking-[.2em] text-primary">Live connection</span><span className="h-2 w-2 animate-pulse bg-primary" /></div>
         </header>
         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
@@ -44,7 +44,7 @@ export default function Play() {
         <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Game mode">
           {MODES.map((option) => {
             const active = option.value === selectedMode;
-            return <button key={option.value} role="radio" aria-checked={active} onClick={() => selectMode(option.value)} className={`group relative overflow-hidden border p-2 sm:p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-primary ${active ? "border-primary bg-primary/10 box-glow-primary" : "border-border/70 bg-card/60 hover:border-primary/50"}`}>
+            return <button key={option.value} role="radio" aria-checked={active} onClick={() => selectMode(option.value)} className={`group relative overflow-hidden border p-2 sm:p-3 text-left transition-all focus:outline-hidden focus:ring-2 focus:ring-primary ${active ? "border-primary bg-primary/10 box-glow-primary" : "border-border/70 bg-card/60 hover:border-primary/50"}`}>
               <span className={`absolute left-0 top-0 h-full w-1 transition-transform ${active ? "bg-primary" : "scale-y-0 bg-border group-hover:scale-y-100"}`} />
               <div className="flex items-center justify-between"><span className="font-display text-xs sm:text-base font-bold uppercase tracking-wider">{option.label}</span><span className={`hidden sm:inline font-mono text-[9px] uppercase tracking-wider ${active ? "text-primary" : "text-muted-foreground"}`}>{option.stat}</span></div>
               <p className="hidden sm:block mt-1 text-sm text-muted-foreground">{option.detail}</p>

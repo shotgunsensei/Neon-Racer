@@ -1,8 +1,34 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source("./");
+@config "../../tailwind.config.ts";
+
+/* Keep the existing v3 blur, shadow and focus defaults during the migration. */
+@theme {
+  --blur-sm: 4px;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --default-ring-width: 3px;
+  --default-ring-color: #3b82f6;
+  /* Retain the v3 palette used by the existing HUD and shared controls. */
+  --color-amber-200: #fde68a;
+  --color-gray-50: #f9fafb;
+  --color-gray-600: #4b5563;
+  --color-gray-900: #111827;
+  --color-purple-300: #d8b4fe;
+  --color-purple-400: #c084fc;
+  --color-purple-600: #9333ea;
+  --color-red-50: #fef2f2;
+  --color-red-300: #fca5a5;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --color-rose-200: #fecdd3;
+  --color-rose-300: #fda4af;
+  --color-rose-400: #fb7185;
+  --color-rose-500: #f43f5e;
+  --color-violet-100: #ede9fe;
+  --color-violet-200: #ddd6fe;
+  --color-violet-300: #c4b5fd;
+}
 
 :root {
   --background: 228 34% 7%;
@@ -37,6 +63,18 @@
 }
 
 @layer base {
+  *, ::before, ::after, ::backdrop, ::file-selector-button {
+    border-color: #e5e7eb;
+  }
+
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: #9ca3af;
+  }
+
   body {
     @apply bg-background text-foreground antialiased min-h-screen;
     font-family: var(--font-body);
@@ -50,6 +88,11 @@
     font-family: var(--font-display);
     letter-spacing: -0.02em;
   }
+}
+
+/* Register this utility so the existing hover variant is also generated. */
+@utility box-glow-primary {
+  box-shadow: 0 14px 40px hsl(var(--primary) / 0.12), inset 0 0 20px hsl(var(--primary) / 0.08);
 }
 
 @layer utilities {
@@ -66,9 +109,6 @@
     text-shadow: 0 0 10px hsl(var(--destructive)), 0 0 20px hsl(var(--destructive));
   }
   
-  .box-glow-primary {
-    box-shadow: 0 14px 40px hsl(var(--primary) / 0.12), inset 0 0 20px hsl(var(--primary) / 0.08);
-  }
   .box-glow-secondary {
     box-shadow: 0 14px 40px hsl(var(--secondary) / 0.12), inset 0 0 20px hsl(var(--secondary) / 0.08);
   }

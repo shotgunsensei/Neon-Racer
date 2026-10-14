@@ -1,7 +1,8 @@
 # Release checks and leaderboard submissions
 
 Run `npm ci`, then `npm run release:check` before releasing. The release command
-runs the existing game regressions, deterministic API tests, TypeScript checks,
+runs the existing game regressions, deterministic API tests, stylesheet/parser
+compatibility checks, TypeScript checks,
 and the client/server production build. GitHub Actions runs the same command on
 pull requests and pushes to `main` with Node 22. API tests bind disposable loopback
 ports, use mocked storage and a fake clock, and need no database or credentials.
