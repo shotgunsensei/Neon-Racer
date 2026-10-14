@@ -20,6 +20,7 @@ import { useGameAudio } from "./useGameAudio";
 import { advanceImmunity, advanceRepair, beginRepair, enterRepairCommand, repairUsesCockpit, type RepairDirection, type RepairState } from "./RepairRoutine";
 import { RepairOverlay } from "./RepairOverlay";
 import { drawRepairBay } from "./RepairVisuals";
+import { closingHazard, drawFlightAtmosphere, playfieldScale } from "./StormFlight";
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 1000;
@@ -45,6 +46,7 @@ const MOMENTUM_DECAY = 0.0045;
 type InputKey = "left" | "right" | "shoot" | "pause" | "start" | "restart" | "focus" | "view" | null;
 
 interface HudSnapshot {
+  traffic: string;
   immunity: number;
   score: number;
   level: number;
@@ -164,6 +166,7 @@ const normalizeInput = (event: KeyboardEvent): InputKey => {
 };
 
 const toHudData = (state: GameState): HudSnapshot => ({
+  traffic: closingHazard(state),
   immunity: Math.ceil(state.immunityMs / 1000),
   score: Math.floor(state.score),
   level: state.level,
@@ -215,6 +218,8 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
   const ensureAudioRef = useRef(ensureAudio);
   const viewRef = useRef<CameraView>("chase");
   const [view, setView] = useState<CameraView>("chase");
+  const [calmEffects, setCalmEffects] = useState(false);
+  const [systemCalm, setSystemCalm] = useState(reducedMotionRef.current);
   const [repairDisplay, setRepairDisplay] = useState<{ repair: RepairState; now: number } | null>(null);
 
   const submitRepairCommand = useCallback((direction: RepairDirection, repeated = false) => {
@@ -236,6 +241,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
   }, []);
 
   const [hudData, setHudData] = useState<HudSnapshot>({
+    traffic: "",
     immunity: 0,
     score: 0,
     level: 1,
@@ -271,12 +277,13 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const syncPreference = () => {
-      reducedMotionRef.current = media.matches;
+      reducedMotionRef.current = media.matches || calmEffects;
+      setSystemCalm(media.matches);
     };
     syncPreference();
     media.addEventListener("change", syncPreference);
     return () => media.removeEventListener("change", syncPreference);
-  }, []);
+  }, [calmEffects]);
 
   useEffect(() => {
     playRef.current = play;
@@ -337,6 +344,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
     state.keys = {};
     state.flight.lastTap = -Infinity;
+    state.flight.steeringVelocity = 0;
     state.isPaused = !state.isPaused;
     if (!state.isPaused) canvasRef.current?.focus({ preventScroll: true });
     setHudData((prev) => ({ ...prev, isPaused: state.isPaused }));
@@ -824,6 +832,8 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, cw, ch);
 
+    drawFlightAtmosphere(ctx, state, cw, viewRef.current === "cockpit" ? 355 : 135, reducedMotionRef.current);
+
     if (state.timeWarpTimer > 0) {
       ctx.save();
       ctx.fillStyle = "rgba(124, 58, 237, 0.08)";
@@ -839,7 +849,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       ctx.strokeStyle = `rgba(244, 63, 94, ${0.42 + pulse * 0.35})`;
       ctx.lineWidth = 5;
       ctx.strokeRect(10, 10, cw - 20, ch - 20);
-      for (let y = 0; y < ch; y += 120) {
+      for (let y = 0; !reducedMotionRef.current && y < ch; y += 120) {
         ctx.globalAlpha = 0.08 + pulse * 0.06;
         ctx.fillStyle = "#fb7185";
         ctx.fillRect(0, (y + state.frames * 3) % ch, cw, 2);
@@ -924,13 +934,15 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     let cockpitWidth = CANVAS_WIDTH;
     let cockpitScale = dpr;
+    let chaseScale = dpr;
     const resizeObserver = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
       if (width > 0 && height > 0) {
         cockpitWidth = Math.max(CANVAS_WIDTH, Math.round(CANVAS_HEIGHT * width / height));
         // Match display pixels instead of allocating an enormous backing store
         // when a wide/short window increases the cockpit's logical width.
-        cockpitScale = dpr * Math.min(1, height / CANVAS_HEIGHT, width / cockpitWidth);
+        cockpitScale = playfieldScale(width, height, cockpitWidth, dpr);
+        chaseScale = playfieldScale(width, height, CANVAS_WIDTH, dpr);
       }
     });
     resizeObserver.observe(canvas);
@@ -1053,7 +1065,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
         lastInactiveDrawRef.current = time;
         const cockpit = viewRef.current === "cockpit" || repairUsesCockpit(state?.repair ?? null);
         const renderWidth = cockpit ? cockpitWidth : CANVAS_WIDTH;
-        const renderScale = cockpit ? cockpitScale : dpr;
+        const renderScale = cockpit ? cockpitScale : chaseScale;
         const pixelWidth = Math.round(renderWidth * renderScale);
         const pixelHeight = Math.round(CANVAS_HEIGHT * renderScale);
         if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
@@ -1094,6 +1106,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
         setIntensity(state.repair ? 0 : Math.min(1, state.level / 12 + (state.stormTimer > 0 ? 0.35 : 0)));
         setHudData((previous) => {
           if (
+            previous.traffic !== next.traffic ||
             previous.immunity !== next.immunity ||
             previous.score !== next.score ||
             previous.level !== next.level ||
@@ -1136,6 +1149,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       if (!state) return;
       state.keys = {};
       state.flight.lastTap = -Infinity;
+      state.flight.steeringVelocity = 0;
       if (state.isStarted && !state.isGameOver && !state.repair) {
         state.isPaused = true;
         setHudData(toHudData(state));
@@ -1193,6 +1207,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
   return (
     <div
+      data-calm-effects={calmEffects || systemCalm}
       className={`relative mx-auto h-full w-full max-w-4xl overflow-hidden border bg-black ${
         hudData.stormTimer > 0
           ? "border-rose-500 shadow-[0_0_38px_rgba(244,63,94,.38)]"
@@ -1282,7 +1297,13 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
         </div>
       </div>
 
-      <div className="absolute right-3 top-3 z-20 flex flex-col items-end gap-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:flex-row">
+      <div className="absolute right-3 top-3 z-20 grid grid-cols-2 gap-2 sm:left-1/2 sm:right-auto sm:flex sm:-translate-x-1/2 sm:flex-row">
+        <button type="button" aria-label="Calm effects" aria-pressed={calmEffects || systemCalm} disabled={systemCalm}
+          onClick={() => { setCalmEffects(value => !value); canvasRef.current?.focus({ preventScroll: true }); }}
+          title={systemCalm ? "Reduced motion enabled by your system" : "Reduce rain, flashes and banking; handling stays the same"}
+          className={`flex h-11 min-w-11 items-center justify-center border bg-background/90 px-2 font-mono text-[9px] uppercase tracking-wider focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${calmEffects || systemCalm ? "border-primary text-primary" : "border-border/70 text-muted-foreground"}`}>
+          {calmEffects || systemCalm ? "Calm" : "FX"}
+        </button>
         <button
           type="button"
           onClick={toggleMuted}
@@ -1307,7 +1328,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
             aria-pressed={view === "cockpit"}
             aria-keyshortcuts="V"
             title={`Switch to ${view === "cockpit" ? "third-person" : "cockpit"} view (V)`}
-            className={`flex h-11 min-w-11 flex-col items-center justify-center gap-0.5 border bg-background/90 px-2 font-mono text-[9px] uppercase tracking-wider backdrop-blur transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:flex-row sm:gap-2 sm:px-3 sm:text-[10px] ${view === "cockpit" ? "border-primary text-primary" : "border-border/70 text-foreground hover:border-primary"}`}
+            className={`col-span-2 flex h-11 min-w-11 flex-col items-center justify-center gap-0.5 border bg-background/90 px-2 font-mono text-[9px] uppercase tracking-wider backdrop-blur transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:flex-row sm:gap-2 sm:px-3 sm:text-[10px] ${view === "cockpit" ? "border-primary text-primary" : "border-border/70 text-foreground hover:border-primary"}`}
           >
             <Camera className="h-4 w-4" aria-hidden="true" />
             <span className="sm:hidden">View</span>
@@ -1371,6 +1392,12 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
         </div>
       )}
 
+      {hudData.isStarted && !hudData.isPaused && !hudData.isGameOver && hudData.traffic && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-24 text-center sm:bottom-16">
+          <span className="border border-amber-200/60 bg-background/90 px-3 py-1 font-mono text-[10px] tracking-wider text-amber-200">{hudData.traffic}</span>
+        </div>
+      )}
+
       {(!hudData.isStarted || !hudData.mode) && (
         <div className="absolute inset-0 bg-background/75 backdrop-blur-sm border border-primary/40 flex flex-col items-center justify-center gap-4 p-8 text-center">
           <p className="text-2xl font-display text-primary text-glow-primary">Run Ready: {MODE_UI[hudData.mode].label}</p>
@@ -1378,6 +1405,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
             Dodge obstacles, lock in pickups, and keep your combo alive. <br />
             Steer with A / D or ← / →. Double-tap either direction for a barrel-roll speed burst. Countersteer to brake; collisions still count. <br />
             Press V or tap View to switch cockpit / third-person cameras. The cockpit radar shows the live third-person track. <br />
+            FX / Calm reduces rain, flashes and banking. Your system's reduced-motion preference is always respected. <br />
             Press <span className="text-primary">ENTER</span> or move/shoot to launch.
           </p>
           <button
@@ -1404,6 +1432,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
 
       {hudData.isGameOver && (
         <GameOverModal
+          reducedMotion={calmEffects || systemCalm}
           score={hudData.score}
           level={hudData.level}
           distance={hudData.distance}

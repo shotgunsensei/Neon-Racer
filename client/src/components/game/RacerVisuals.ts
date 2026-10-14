@@ -10,11 +10,13 @@ export interface FlightPose {
   cooldown: number;
   lastTap: number;
   lastDirection: number;
+  steeringVelocity: number;
 }
 
 export const createFlightPose = (): FlightPose => ({
   elapsed: 0, bank: 0, roll: 0, rollDirection: 0, rollRemaining: 0, dashRemaining: 0, cooldown: 0,
   lastTap: -Infinity, lastDirection: 0,
+  steeringVelocity: 0,
 });
 
 // Frames are simulation time: pausing also pauses the roll and its cooldown.
@@ -52,17 +54,29 @@ export function moveRacer(state: GameState, baseStep: number, delta: number, wid
   const pose = state.flight;
   const left = Boolean(state.keys.left), right = Boolean(state.keys.right);
   const direction = Number(right) - Number(left);
-  if ((left && right) || (direction !== 0 && direction !== pose.rollDirection)) pose.dashRemaining = 0;
+  const brakingBurst = pose.dashRemaining > 0 && ((left && right) || (direction !== 0 && direction !== pose.rollDirection));
+  if (brakingBurst) pose.dashRemaining = 0;
   const burstTime = Math.min(delta, pose.dashRemaining);
   // Integrate the taper, including a frame that crosses the end of the burst.
   const averageSpeed = 1 + 1.4 * (pose.dashRemaining - burstTime / 2) / 18;
-  const displacement = baseStep / delta * (
-    pose.rollDirection * burstTime * averageSpeed + direction * (delta - burstTime)
-  );
+  // 50 ms response: a little mass on launch, but release and countersteer brake
+  // immediately. Integrate the exponential exactly so handling is independent
+  // of display refresh rate. A barrel roll keeps its existing dodge distance.
+  if (direction === 0 || direction !== Math.sign(pose.steeringVelocity)) pose.steeringVelocity = 0;
+  if (brakingBurst) pose.steeringVelocity = direction;
+  if (burstTime > 0) pose.steeringVelocity = direction;
+  const steerTime = delta - burstTime;
+  const decay = Math.exp(-steerTime / 3);
+  const steeringTravel = direction * steerTime + (pose.steeringVelocity - direction) * 3 * (1 - decay);
+  pose.steeringVelocity = direction + (pose.steeringVelocity - direction) * decay;
+  const displacement = baseStep / delta * (pose.rollDirection * burstTime * averageSpeed + steeringTravel);
   pose.dashRemaining = Math.max(0, pose.dashRemaining - delta);
   const previousX = state.player.x;
   state.player.x = Math.max(0, Math.min(width - state.player.w, previousX + displacement));
-  if (state.player.x === 0 || state.player.x === width - state.player.w) pose.dashRemaining = 0;
+  if (state.player.x === 0 || state.player.x === width - state.player.w) {
+    pose.dashRemaining = 0;
+    pose.steeringVelocity = 0;
+  }
   updateFlight(pose, baseStep > 0 ? (state.player.x - previousX) / baseStep : 0, delta, reducedMotion);
 }
 
@@ -141,6 +155,15 @@ export function drawTrack(ctx: CanvasRenderingContext2D, state: GameState, reduc
     polygon(ctx, projectFootprint({ x: lane * 800 / 6, y: -120, w: 800 / 6, h: 1160, color: "" }));
     ctx.fill();
   }
+  // Broad, quiet wet-road highlights retain every lane edge and hazard outline.
+  for (const x of [55, 278, 522, 745]) {
+    const reflection = ctx.createLinearGradient(0, 180, 0, 1000);
+    reflection.addColorStop(0, "rgba(98,224,246,0)");
+    reflection.addColorStop(1, state.stormTimer > 0 ? "rgba(241,154,174,.1)" : "rgba(98,224,246,.07)");
+    ctx.fillStyle = reflection;
+    polygon(ctx, projectFootprint({ x, y: -120, w: 16, h: 1160, color: "" }));
+    ctx.fill();
+  }
   // Wide illuminated shoulders give the roadway physical thickness.
   for (const [x, width] of [[-18, 18], [800, 18]]) {
     ctx.fillStyle = "#153445";
@@ -205,6 +228,12 @@ export function drawObstacle(ctx: CanvasRenderingContext2D, obstacle: Obstacle) 
   const scale = project(obstacle.x, obstacle.y + obstacle.h).scale;
   const sweeper = obstacle.type === "sweeper";
   ctx.save();
+
+  ctx.fillStyle = obstacle.color;
+  ctx.globalAlpha = .08;
+  polygon(ctx, projectFootprint({ ...obstacle, y: obstacle.y + obstacle.h, h: 45 }));
+  ctx.fill();
+  ctx.globalAlpha = 1;
 
   // The shadow/outline is the real footprint; the raised cap is decoration.
   ctx.fillStyle = "rgba(0,0,0,0.6)";

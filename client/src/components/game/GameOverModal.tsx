@@ -13,6 +13,7 @@ interface GameOverModalProps {
   nearMiss?: number;
   mode?: "arcade" | "racer" | "chaos";
   onRestart: () => void;
+  reducedMotion?: boolean;
 }
 
 export function GameOverModal({
@@ -24,6 +25,7 @@ export function GameOverModal({
   nearMiss = 0,
   mode = "arcade",
   onRestart,
+  reducedMotion = false,
 }: GameOverModalProps) {
   const [playerName, setPlayerName] = useState("");
   const { mutate: createScore, isPending, isSuccess, isError, error } = useCreateScore();
@@ -39,7 +41,7 @@ export function GameOverModal({
   }, []);
 
   useEffect(() => {
-    if (score >= 1000 && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (score >= 1000 && !reducedMotion && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       confetti({
         particleCount: 100,
         spread: 70,
@@ -47,7 +49,7 @@ export function GameOverModal({
         colors: ["#00ffff", "#ff00ff", "#ffff00"],
       });
     }
-  }, [score]);
+  }, [score, reducedMotion]);
 
   useEffect(() => {
     if (isSuccess) successRestartRef.current?.focus();
