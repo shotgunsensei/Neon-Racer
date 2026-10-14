@@ -5,6 +5,10 @@ creation are pending the parent task's October 14 credential-security hold.
 No authenticated GitHub write, merge, Replit publish, migration, credential change,
 paid CI run or new service was performed by this task.
 
+The completed game/dependency branch remains at `5593880`. A separately preserved
+ORM readiness candidate is documented at the end of this record; it does not
+replace that branch or its receipts.
+
 ## Source and scope
 
 The active project is `C:\Dev\Neon-Racer-New`, repository
@@ -79,7 +83,7 @@ The tiny interval difference is not evidence of a meaningful FPS gain. This
 headless Windows session does not establish 60 FPS, physical-device performance,
 long-session stability or production-host performance.
 
-## Remaining release gates
+## Remaining release gates at 5593880
 
 Security is not clean: the compatible dependency follow-up leaves 8 affected
 packages in the production audit and 9 in the full audit, plus a development HMR
@@ -98,7 +102,7 @@ Replit source/build identity, runtime toolchain compatibility and post-publish
 gameplay before merging/publishing. No migrations are needed. Roll back by
 reverting this slice and redeploying the previous verified build.
 
-## Compatible dependency follow-up
+## Compatible dependency follow-up at 5593880
 
 The original production audit contained 20 affected package nodes, including
 transitive effects; this is not a count of distinct advisory identifiers. Static
@@ -205,3 +209,72 @@ Playwright CLI snippets, not part of `test:game`. `playtest-performance.js` also
 requires an untouched main archive served at port 5188. Run its two samples
 sequentially without concurrent builds or readback probes. Desktop screenshot
 checks used a 1280x900 browser viewport.
+
+## Separately preserved ORM readiness candidate
+
+After the October 14 reboot, both the original checkout and the completed game
+worktree were verified clean. The new local branch
+`codex/neon-racer-readiness-candidate` starts from `5593880`. It changes only the
+Drizzle ORM dependency range to `^0.45.2` (locked to 0.45.4), adds four regressions,
+and updates this QA record. Drizzle Zod 0.7.0, Zod 3.24.2, PG 8.16.3, schema,
+storage, API, limiter, game code and provider configuration are unchanged. No
+migration, database connection, credential change or authenticated GitHub write
+was performed. No new feature was added.
+
+The old ORM reproduction compiled `score";--`, `a""b` and a Unicode name with
+an embedded delimiter without doubling every double quote. A normal identifier
+compiled correctly. Candidate regressions now verify that every such input
+remains one quoted PostgreSQL identifier and that selection aliases use the same
+rule. This removes the package vulnerability fixed in the
+[Drizzle 0.45.2 release](https://github.com/drizzle-team/drizzle-orm/releases/tag/0.45.2).
+It does not reclassify the current static leaderboard as previously exploitable.
+
+Two additional regressions preserve trimmed Unicode/punctuation names, integer
+and INT32 limits, omitted server-owned fields, SQL defaults and bound score
+parameters. A fake PostgreSQL client exercises the actual ORM adapter, returned
+row and timestamp mapping, and top-ten ordering without contacting a database.
+The fresh read-only reviewer found no concrete surviving bypass or regression,
+and independently ran the four new tests: all passed.
+
+The first `npm ci --ignore-scripts --no-fund` check failed with Windows `EBUSY`
+while unlinking the ORM package. Installed-file inspection was paused, and one
+clean-install retry succeeded. The required `npm run release:check` then passed:
+36 game tests, 39 API tests, TypeScript and client/server production builds.
+`git diff --check` also passed. No lint command is configured. No unchanged
+browser suite or frame-pacing sample was rerun.
+
+The production audit now reports 7 affected package nodes: Braces, Chokidar,
+Fast-glob, Micromatch, PostCSS Nested, PostCSS Selector Parser and Tailwind CSS
+(5 high, 2 moderate, 0 critical). The full audit adds @tailwindcss/typography
+(5 high, 3 moderate, 0 critical). Both audit commands still exit 1. These remaining
+parser/scanner findings and Vite's vendored development WebSocket path remain
+engineering work; they are not automatically owner-only blockers.
+
+The CSS build remains `index-BzTasy0U.css`, 84,346 bytes. The ORM candidate's client
+is `index-NILPGbzw.js`, 471,605 bytes, versus 469,680 bytes at `5593880`: an increase
+of 1,925 bytes (about 0.41%). The existing browser and frame-pacing receipts measure
+the earlier client, not these new bundle bytes. Hosted PostgreSQL, Replit runtime
+and production playability are unverified; this local candidate has not been
+promoted or published.
+
+Public package metadata still lists Vite 7.3.7 as the latest 7.x release. Replacing
+its embedded affected ws through Vite 8 would also replace the compiler/minifier
+pipeline with Rolldown/Oxc and require a compatible React plugin. The current
+plugin's peer range ends at Vite 7. A separate local Vite candidate and a Tailwind
+scanner/selector migration can proceed as engineering work with HMR and CSS
+compatibility checks; no owner authorization is newly required for that local
+work. They were not mixed into this bounded ORM candidate.
+
+The owner-only release step remains resolving the exposed PAT's identity and
+revocation through the parent task, then clearing the authenticated-write hold.
+Deleting entries labelled Replit/Codex does not itself prove which token was
+exposed. Exact-head CI and hosted acceptance remain release gates after the hold;
+provider inspection belongs to CallCommandAI. No token values or raw credential
+configuration were read or printed here.
+
+Library discovery was checked once through the prescribed route after reboot.
+The upload tool remains unavailable to that helper, despite agent-catalogue
+entries. That check made zero upload calls; no direct fallback or uncertain-write
+retry was used. The preserved screenshot and QA deliverable remain local with
+no confirmed Library file IDs. This is a tooling limitation, not a request for
+special user wording or new credentials.
