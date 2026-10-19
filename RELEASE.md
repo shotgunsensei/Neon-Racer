@@ -7,6 +7,13 @@ and the client/server production build. GitHub Actions runs the same command on
 pull requests and pushes to `main` with Node 22. API tests bind disposable loopback
 ports, use mocked storage and a fake clock, and need no database or credentials.
 
+Browser audio preferences are optional. Storage denial or quota failures keep
+the game and this session's mute control working; the preference persists only
+when storage is available. `script/playtest-storage.js` verifies boot, launch,
+advancing score and mute toggles in disposable storage-denial/quota contexts.
+The three preference regressions also run in `npm run test:game`. This increment
+changes no gameplay rules, score contract, dependencies, database or deployment.
+
 ## Submission contract
 
 `POST /api/scores` remains anonymous. Names are trimmed, then must contain 1–15

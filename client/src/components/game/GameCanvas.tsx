@@ -1306,7 +1306,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
         </button>
         <button
           type="button"
-          onClick={toggleMuted}
+          onClick={() => { toggleMuted(); canvasRef.current?.focus({ preventScroll: true }); }}
           className="flex h-11 w-11 items-center justify-center border border-border/70 bg-background/85 text-muted-foreground backdrop-blur transition-colors hover:border-primary hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           aria-label={muted ? "Enable game audio" : "Mute game audio"}
           title={muted ? "Enable audio" : "Mute audio"}
