@@ -33,12 +33,22 @@ const SOUND_SHAPES: Record<GameSound, [number, number, number, OscillatorType, n
   repairFail: [240, 55, 0.4, "square", 0.08],
 };
 
+export function readMutedPreference() {
+  try { return localStorage.getItem("neon-racer-muted") === "true"; }
+  catch { return false; }
+}
+
+export function writeMutedPreference(muted: boolean) {
+  try { localStorage.setItem("neon-racer-muted", String(muted)); }
+  catch { /* Browser storage is optional; keep this session's audio setting. */ }
+}
+
 export function useGameAudio() {
   const contextRef = useRef<AudioContext | null>(null);
   const masterRef = useRef<GainNode | null>(null);
   const ambienceRef = useRef<GainNode | null>(null);
   const lastPlayedRef = useRef<Record<string, number>>({});
-  const [muted, setMutedState] = useState(() => localStorage.getItem("neon-racer-muted") === "true");
+  const [muted, setMutedState] = useState(readMutedPreference);
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
 
@@ -112,7 +122,7 @@ export function useGameAudio() {
     setMutedState((current) => {
       const next = !current;
       mutedRef.current = next;
-      localStorage.setItem("neon-racer-muted", String(next));
+      writeMutedPreference(next);
       const context = contextRef.current;
       const master = masterRef.current;
       if (context && master) {
