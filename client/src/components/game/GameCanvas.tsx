@@ -219,6 +219,11 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
   const viewRef = useRef<CameraView>("chase");
   const [view, setView] = useState<CameraView>("chase");
   const [calmEffects, setCalmEffects] = useState(false);
+  const [performanceMode, setPerformanceMode] = useState(() => {
+    try { return localStorage.getItem('neon-racer.performance-mode') === 'on'; }
+    catch { return false; }
+  });
+  const performanceModeRef = useRef(performanceMode);
   const [systemCalm, setSystemCalm] = useState(reducedMotionRef.current);
   const [repairDisplay, setRepairDisplay] = useState<{ repair: RepairState; now: number } | null>(null);
 
@@ -928,21 +933,27 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, performanceModeRef.current ? 1 : 2);
     canvas.width = CANVAS_WIDTH * dpr;
     canvas.height = CANVAS_HEIGHT * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     let cockpitWidth = CANVAS_WIDTH;
     let cockpitScale = dpr;
     let chaseScale = dpr;
+    let displayWidth = CANVAS_WIDTH, displayHeight = CANVAS_HEIGHT;
+    const updateScales = () => {
+      const density = Math.min(window.devicePixelRatio || 1, performanceModeRef.current ? 1 : 2);
+      cockpitWidth = Math.max(CANVAS_WIDTH, Math.round(CANVAS_HEIGHT * displayWidth / displayHeight));
+      cockpitScale = playfieldScale(displayWidth, displayHeight, cockpitWidth, density);
+      chaseScale = playfieldScale(displayWidth, displayHeight, CANVAS_WIDTH, density);
+    };
     const resizeObserver = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
       if (width > 0 && height > 0) {
-        cockpitWidth = Math.max(CANVAS_WIDTH, Math.round(CANVAS_HEIGHT * width / height));
+        displayWidth = width; displayHeight = height;
         // Match display pixels instead of allocating an enormous backing store
         // when a wide/short window increases the cockpit's logical width.
-        cockpitScale = playfieldScale(width, height, cockpitWidth, dpr);
-        chaseScale = playfieldScale(width, height, CANVAS_WIDTH, dpr);
+        updateScales();
       }
     });
     resizeObserver.observe(canvas);
@@ -1036,6 +1047,9 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
     };
 
     const loop = (time: number) => {
+      // Read only display preferences here. Changing resolution must not rerun
+      // this effect's initGame or alter a live run's physics, score or repairs.
+      updateScales();
       const state = stateRef.current;
       const deltaMs = time - (lastFrameRef.current || time);
       lastFrameRef.current = time;
@@ -1303,6 +1317,18 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
           title={systemCalm ? "Reduced motion enabled by your system" : "Reduce rain, flashes and banking; handling stays the same"}
           className={`flex h-11 min-w-11 items-center justify-center border bg-background/90 px-2 font-mono text-[9px] uppercase tracking-wider focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${calmEffects || systemCalm ? "border-primary text-primary" : "border-border/70 text-muted-foreground"}`}>
           {calmEffects || systemCalm ? "Calm" : "FX"}
+        </button>
+        <button type="button" aria-label="Performance mode" aria-pressed={performanceMode}
+          onClick={() => {
+            const next = !performanceModeRef.current;
+            performanceModeRef.current = next;
+            setPerformanceMode(next);
+            try { localStorage.setItem('neon-racer.performance-mode', next ? 'on' : 'off'); } catch { /* This session still works without storage. */ }
+            canvasRef.current?.focus({ preventScroll: true });
+          }}
+          title="Lower rendering resolution on high-density screens; gameplay and handling stay the same"
+          className={`flex h-11 min-w-11 items-center justify-center border bg-background/90 px-2 font-mono text-[9px] uppercase tracking-wider focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${performanceMode ? "border-primary text-primary" : "border-border/70 text-muted-foreground"}`}>
+          {performanceMode ? "Eco on" : "Eco"}
         </button>
         <button
           type="button"
