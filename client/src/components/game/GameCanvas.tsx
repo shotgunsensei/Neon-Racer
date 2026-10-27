@@ -1425,7 +1425,7 @@ export function GameCanvas({ mode, onGameOver }: GameCanvasProps) {
       )}
 
       {(!hudData.isStarted || !hudData.mode) && (
-        <div className="absolute inset-0 bg-background/75 backdrop-blur-sm border border-primary/40 flex flex-col items-center justify-center gap-4 p-8 text-center">
+        <div className="absolute inset-0 overflow-y-auto bg-background/75 backdrop-blur-sm border border-primary/40 flex flex-col items-center justify-start gap-4 px-6 pb-8 pt-44 text-center sm:justify-center sm:p-8">
           <p className="text-2xl font-display text-primary text-glow-primary">Run Ready: {MODE_UI[hudData.mode].label}</p>
           <p className="text-sm text-muted-foreground max-w-lg">
             Dodge obstacles, lock in pickups, and keep your combo alive. <br />

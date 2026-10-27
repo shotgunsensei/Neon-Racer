@@ -3,7 +3,7 @@ import { useScores } from "@/hooks/use-scores";
 import { Trophy, Medal, Orbit, AlertCircle, RefreshCw } from "lucide-react";
 
 export function Leaderboard() {
-  const { data: scores, isLoading, isError, refetch } = useScores();
+  const { data: scores, isLoading, isError, isFetching, refetch } = useScores();
   const top10 = useMemo(() => {
     if (!scores) return [];
     const sortedScores = [...scores].sort((a, b) => b.score - a.score);
@@ -11,7 +11,7 @@ export function Leaderboard() {
   }, [scores]);
 
   return (
-    <section className="bg-card/80 backdrop-blur-md border border-border/80 p-5 sm:p-6 relative overflow-hidden" aria-labelledby="leaderboard-title">
+    <section className="bg-card/80 backdrop-blur-md border border-border/80 p-5 sm:p-6 relative overflow-hidden" aria-labelledby="leaderboard-title" aria-busy={isFetching}>
       {/* Decorative background element */}
       <div className="absolute top-0 right-0 -mt-10 -mr-10 opacity-10">
         <Orbit className="w-64 h-64 text-secondary animate-spin-slow" style={{ animationDuration: '20s' }} />
@@ -26,15 +26,16 @@ export function Leaderboard() {
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-12 text-secondary">
+        <div className="flex flex-col items-center justify-center py-12 text-secondary" role="status">
           <div className="mb-4 h-8 w-8 animate-pulse border border-primary/60 bg-primary/10" />
           <p className="font-mono text-xs uppercase tracking-widest animate-pulse">Reading signal...</p>
         </div>
       ) : isError ? (
-        <div className="flex flex-col items-center justify-center py-12 text-destructive">
+        <div className="relative z-10 flex flex-col items-center justify-center py-12 text-destructive" role="status">
           <AlertCircle className="w-8 h-8 mb-4" />
-          <p className="font-display">Connection lost</p>
-          <button onClick={() => refetch()} className="mt-4 inline-flex items-center gap-2 border border-destructive/50 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-destructive hover:bg-destructive/10 focus:outline-hidden focus:ring-2 focus:ring-destructive"><RefreshCw className="h-3 w-3" /> Retry</button>
+          <p className="font-display">Leaderboard unavailable</p>
+          <p className="mt-2 text-center text-sm text-muted-foreground">You can still play. Scores will return when the connection recovers.</p>
+          <button disabled={isFetching} onClick={() => refetch()} className="mt-4 inline-flex min-h-11 items-center gap-2 border border-destructive/50 px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-destructive hover:bg-destructive/10 focus:outline-hidden focus:ring-2 focus:ring-destructive disabled:cursor-wait disabled:opacity-70"><RefreshCw className="h-3 w-3" /> {isFetching ? 'Reconnecting…' : 'Retry leaderboard'}</button>
         </div>
       ) : top10.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
