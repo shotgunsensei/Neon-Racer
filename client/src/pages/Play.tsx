@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { useLocation } from "wouter";
 import { GameCanvas } from "@/components/game/GameCanvas";
 import { GameMode } from "@/components/game/GameEngine";
@@ -27,6 +27,16 @@ export default function Play() {
     return () => { document.body.style.overflow = overflow; document.body.style.touchAction = touch; };
   }, []);
   const selectMode = (mode: PlayMode) => { setSelectedMode(mode); setLocation(`/play?mode=${mode}`); };
+  const navigateModes = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const steps: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+    const step = steps[event.key];
+    if (step === undefined && event.key !== 'Home' && event.key !== 'End') return;
+    event.preventDefault(); event.stopPropagation();
+    const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? MODES.length - 1 : (index + step + MODES.length) % MODES.length;
+    const next = MODES[nextIndex];
+    selectMode(next.value);
+    event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-mode="${next.value}"]`)?.focus();
+  };
   const handleGameOver = (score: number, level: number, meta?: LastRunSummary) => setLastRun({ score, level, distance: meta?.distance ?? 0, maxCombo: meta?.maxCombo ?? 0, maxMomentum: meta?.maxMomentum ?? 0, nearMiss: meta?.nearMiss ?? 0, mode: meta?.mode ?? selectedMode });
 
   return (
@@ -42,9 +52,9 @@ export default function Play() {
           <p className="hidden sm:block max-w-xs text-left text-sm text-muted-foreground sm:text-right">F triggers Neon Surge. In Chaos, Data Storm challenge waves escalate the run.</p>
         </div>
         <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Game mode">
-          {MODES.map((option) => {
+          {MODES.map((option, index) => {
             const active = option.value === selectedMode;
-            return <button key={option.value} role="radio" aria-checked={active} onClick={() => selectMode(option.value)} className={`group relative overflow-hidden border p-2 sm:p-3 text-left transition-all focus:outline-hidden focus:ring-2 focus:ring-primary ${active ? "border-primary bg-primary/10 box-glow-primary" : "border-border/70 bg-card/60 hover:border-primary/50"}`}>
+            return <button key={option.value} role="radio" aria-checked={active} tabIndex={active ? 0 : -1} data-mode={option.value} onKeyDown={event => navigateModes(event, index)} onClick={() => selectMode(option.value)} className={`group relative min-h-11 overflow-hidden border p-2 sm:p-3 text-left transition-all focus:outline-hidden focus:ring-2 focus:ring-primary ${active ? "border-primary bg-primary/10 box-glow-primary" : "border-border/70 bg-card/60 hover:border-primary/50"}`}>
               <span className={`absolute left-0 top-0 h-full w-1 transition-transform ${active ? "bg-primary" : "scale-y-0 bg-border group-hover:scale-y-100"}`} />
               <div className="flex items-center justify-between"><span className="font-display text-xs sm:text-base font-bold uppercase tracking-wider">{option.label}</span><span className={`hidden sm:inline font-mono text-[9px] uppercase tracking-wider ${active ? "text-primary" : "text-muted-foreground"}`}>{option.stat}</span></div>
               <p className="hidden sm:block mt-1 text-sm text-muted-foreground">{option.detail}</p>

@@ -25,7 +25,7 @@ export default function Home() {
               <p className="font-display text-sm font-bold tracking-[.16em]">NEON RACER</p>
             </div>
           </div>
-          <p className="hidden font-mono text-[10px] uppercase tracking-[.25em] text-muted-foreground sm:block">Hostile mainframe / live feed</p>
+          <a href="https://lunchbreak.operatoros.net/" className="inline-flex min-h-11 items-center px-2 font-mono text-[11px] uppercase tracking-[.12em] text-primary underline underline-offset-4 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Lunch Break</a>
         </header>
 
         <section className="grid min-h-[630px] items-center gap-12 py-16 lg:grid-cols-[1.15fr_.85fr] lg:py-20">
