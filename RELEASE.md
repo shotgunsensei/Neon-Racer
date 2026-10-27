@@ -66,6 +66,13 @@ leaderboard rows are unchanged; this release does not sanitize historical data.
 
 ## Publication and recovery
 
+Automatic sample leaderboard initialization is limited to explicit `development`
+and `test` environments. Production and absent or unknown `NODE_ENV` values do
+not read or seed scores at startup. Existing scores remain unchanged; this does
+not delete earlier sample rows. The production bundle fixes `NODE_ENV` to
+`production`, preserving the same closed behavior under Replit's direct Node
+start command. No migration or new configuration setting is needed.
+
 After CI passes for the exact PR head and merged `main`, sync the Replit project
 to that verified main commit, build, and publish. Verify the home/play pages and
 leaderboard read without submitting live test scores. Publishing from the open

@@ -54,7 +54,11 @@ export async function registerRoutes(
   return httpServer;
 }
 
-export async function seedDatabase(storage: IStorage) {
+export async function seedDatabase(storage: IStorage, environment: string | undefined = process.env.NODE_ENV) {
+  // These are local demo scores, never production reference data. Unknown
+  // environments must not read or write the leaderboard during startup.
+  if (environment !== "development" && environment !== "test") return;
+
   try {
     const existingScores = await storage.getHighScores();
     if (existingScores.length === 0) {
